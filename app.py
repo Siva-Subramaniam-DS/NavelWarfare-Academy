@@ -1397,8 +1397,8 @@ async def event_create(
     
     # Captains Section
     captains_text = f"**Captains**\n"
-    captains_text += f"▪ Team1 Captain: {team_1_captain.mention}\n"
-    captains_text += f"▪ Team2 Captain: {team_2_captain.mention}"
+    captains_text += f"▪ Team1 Captain: {team_1_captain.mention} @{team_1_captain.name}\n"
+    captains_text += f"▪ Team2 Captain: {team_2_captain.mention} @{team_2_captain.name}"
     embed.add_field(name="👑 Team Captains", value=captains_text, inline=False)
     
     # Add spacing

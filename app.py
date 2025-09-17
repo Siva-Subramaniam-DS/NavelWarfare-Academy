@@ -1725,7 +1725,7 @@ async def choose(interaction: discord.Interaction, options: str):
                 inline=False
             )
             
-            embed.set_footer(text="Random Map Selection • 😈The Devil's Spot😈")
+            embed.set_footer(text=f"Random Map Selection • {ORGANIZATION_NAME}")
             await interaction.response.send_message(embed=embed)
             return
         else:
@@ -1763,7 +1763,7 @@ async def choose(interaction: discord.Interaction, options: str):
         inline=False
     )
     
-    embed.set_footer(text="Random Choice Generator •  😈The Devil's Spot😈")
+    embed.set_footer(text=f"Random Choice Generator • {ORGANIZATION_NAME}")
     
     await interaction.response.send_message(embed=embed)
 

@@ -25,20 +25,21 @@ load_dotenv()
 
 # Channel IDs for event management
 CHANNEL_IDS = {
-    "take_schedule": 1272263927736045618,
-    "results": 1175587317558288484,
-    "staff_attendance": 1197214718713155595,
-    "transcript": 1175720148259324017
+    "take_schedule": 1281967703506026538,    # Schedule channel for posting match schedules
+    "results": 1281967638360359067,          # Results channel for posting match outcomes
+    "staff_attendance": 1378979992641339403  # Attendance channel for staff tracking
 }
 
 # Role IDs for permissions
 ROLE_IDS = {
-    "judge": 1175620798912925917,
-    # "recorder": 1302493626672091209,  # Commented out - not needed for now
-    "head_helper": 1228878162918637578,
-    "helper_team": 1175619471671566406,
-    "head_organizer": 1175890156067229838
+    "judge": 1261723119257915412,        # Judge role
+    "bot_op": 1242280627991220275,       # Bot operator role (like helper head and helper team)
+    "organizer": 1314905337437880340     # Organizer role
 }
+
+# Branding constants
+ORGANIZATION_NAME = "Naval Warfare Academy"
+TOURNAMENT_SYSTEM_NAME = "Naval Warfare Academy Tournament System"
 
 # Set Windows event loop policy for asyncio
 import sys
@@ -162,8 +163,8 @@ def set_rules_content(content, user_id, username):
 
 def has_organizer_permission(interaction):
     """Check if user has organizer permissions for rule management"""
-    head_organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_organizer"])
-    return head_organizer_role is not None
+    organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
+    return organizer_role is not None
 
 # Embed field utility functions for safe Discord.py embed manipulation
 def find_field_index(embed: discord.Embed, field_name: str) -> int:
@@ -255,11 +256,11 @@ class TakeScheduleButton(View):
             await interaction.response.send_message("⏳ Another judge is currently taking this schedule. Please wait a moment.", ephemeral=True)
             return
             
-        # Check if user has Judge or Head Organizer role
-        head_organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_organizer"])
+        # Check if user has Judge or Organizer role
+        organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
         judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
-        if not (head_organizer_role or judge_role):
-            await interaction.response.send_message("❌ You need **Head Organizer** or **Judge** role to take this schedule.", ephemeral=True)
+        if not (organizer_role or judge_role):
+            await interaction.response.send_message("❌ You need **Organizer** or **Judge** role to take this schedule.", ephemeral=True)
             return
             
         # Check if already taken
@@ -366,7 +367,7 @@ class TakeScheduleButton(View):
                 inline=True
             )
             
-            embed.set_footer(text="Judge Assignment • 😈The Devil's Spot😈")
+            embed.set_footer(text=f"Judge Assignment • {ORGANIZATION_NAME}")
             
             # Send notification to the event channel
             await self.event_channel.send(
@@ -482,7 +483,7 @@ async def display_rules(interaction: discord.Interaction):
                 color=discord.Color.orange(),
                 timestamp=discord.utils.utcnow()
             )
-            embed.set_footer(text="😈The Devil's Spot😈 Tournament System")
+            embed.set_footer(text=TOURNAMENT_SYSTEM_NAME)
         else:
             embed = discord.Embed(
                 title="📋 Tournament Rules",
@@ -494,7 +495,7 @@ async def display_rules(interaction: discord.Interaction):
             # Add metadata if available
             if 'rules' in tournament_rules and 'last_updated' in tournament_rules['rules']:
                 updated_by = tournament_rules['rules'].get('updated_by', {}).get('username', 'Unknown')
-                embed.set_footer(text=f"😈The Devil's Spot😈 • Last updated by {updated_by}")
+                embed.set_footer(text=f"{ORGANIZATION_NAME} • Last updated by {updated_by}")
         
         await interaction.response.send_message(embed=embed, ephemeral=False)
         
@@ -803,7 +804,7 @@ def get_random_template():
             return random.choice(image_files)
     return None
 
-def create_event_poster(template_path: str, round_label: str, team1_captain: str, team2_captain: str, utc_time: str, date_str: str = None, tournament_name: str = "King of the Seas", server_name: str = "The Devil's Spot") -> str:
+def create_event_poster(template_path: str, round_label: str, team1_captain: str, team2_captain: str, utc_time: str, date_str: str = None, tournament_name: str = "King of the Seas", server_name: str = ORGANIZATION_NAME) -> str:
     """Create event poster with text overlays using Google Fonts and improved error handling"""
     print(f"Creating poster with template: {template_path}")
     
@@ -1043,17 +1044,16 @@ def calculate_time_difference(event_datetime: datetime.datetime, user_timezone: 
     }
 
 def has_event_create_permission(interaction):
-    """Check if user has permission to create events (Head Organizer, Head Helper or Helper Team)"""
-    head_organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_organizer"])
-    head_helper_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_helper"])
-    helper_team_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["helper_team"])
-    return head_organizer_role is not None or head_helper_role is not None or helper_team_role is not None
+    """Check if user has permission to create events (Organizer or Bot Op)"""
+    organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
+    bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
+    return organizer_role is not None or bot_op_role is not None
 
 def has_event_result_permission(interaction):
-    """Check if user has permission to post event results (Head Organizer or Judge)"""
-    head_organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_organizer"])
+    """Check if user has permission to post event results (Organizer or Judge)"""
+    organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
-    return head_organizer_role is not None or judge_role is not None
+    return organizer_role is not None or judge_role is not None
 
 @bot.event
 async def on_ready():
@@ -1184,7 +1184,7 @@ async def rules_command(interaction: discord.Interaction):
                     inline=True
                 )
             
-            embed.set_footer(text="😈The Devil's Spot😈 • Organizer Panel")
+            embed.set_footer(text=f"{ORGANIZATION_NAME} • Organizer Panel")
             
             # Send with management buttons
             view = RulesManagementView()
@@ -1423,7 +1423,7 @@ async def event_create(
         except Exception as e:
             print(f"Error loading poster image: {e}")
     
-    embed.set_footer(text="Event Management • 😈The Devil's Spot😈")
+    embed.set_footer(text=f"Event Management • {ORGANIZATION_NAME}")
     
     # Create Take Schedule button
     take_schedule_view = TakeScheduleButton(event_id, team_1_captain, team_2_captain, interaction.channel)
@@ -1577,7 +1577,7 @@ async def event_result(
         screenshot_text += f"📷 {' • '.join(screenshot_names)}"
         embed.add_field(name="", value=screenshot_text, inline=False)
     
-    embed.set_footer(text="Event Results • 😈The Devil's Spot😈")
+    embed.set_footer(text=f"Event Results • {ORGANIZATION_NAME}")
     
     # Send confirmation to user
     await interaction.followup.send("✅ Event results posted to Results channel and Staff Attendance logged!", ephemeral=True)
@@ -1670,7 +1670,7 @@ async def time(interaction: discord.Interaction):
         inline=False
     )
                     
-    embed.set_footer(text="Match Time Generator • 😈The Devil's Spot😈")
+    embed.set_footer(text=f"Match Time Generator • {ORGANIZATION_NAME}")
     
     await interaction.response.send_message(embed=embed)
 
@@ -1711,7 +1711,7 @@ async def choose(interaction: discord.Interaction, options: str):
             selected_maps = random.sample(maps, number)
             
             embed = discord.Embed(
-                title="🗺️ Random Map Selection 😈The Devil's Spot😈",
+                title=f"🗺️ Random Map Selection {ORGANIZATION_NAME}",
                 description=f"**Randomly selected {number} map(s):**",
                 color=discord.Color.green(),
                 timestamp=discord.utils.utcnow()
@@ -1772,13 +1772,12 @@ async def choose(interaction: discord.Interaction, options: str):
 async def unassigned_events(interaction: discord.Interaction):
     """Show all scheduled events that do not currently have a judge assigned."""
     try:
-        # Allow Head Organizer, Head Helper, Helper Team, and Judges to view
-        head_organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_organizer"]) if interaction.user else None
-        head_helper_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_helper"]) if interaction.user else None
-        helper_team_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["helper_team"]) if interaction.user else None
+        # Allow Organizer, Bot Op, and Judges to view
+        organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"]) if interaction.user else None
+        bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"]) if interaction.user else None
         judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"]) if interaction.user else None
 
-        if not (head_organizer_role or head_helper_role or helper_team_role or judge_role):
+        if not (organizer_role or bot_op_role or judge_role):
             await interaction.response.send_message("❌ You need Organizer or Judge role to view unassigned events.", ephemeral=True)
             return
 
@@ -1851,13 +1850,12 @@ async def unassigned_events(interaction: discord.Interaction):
 
 @tree.command(name="event-delete", description="Delete a scheduled event (Head Organizer/Head Helper/Helper Team only)")
 async def event_delete(interaction: discord.Interaction):
-    # Check permissions - only Head Organizer, Head Helper or Helper Team can delete events
-    head_organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_organizer"])
-    head_helper_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["head_helper"])
-    helper_team_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["helper_team"])
+    # Check permissions - only Organizer or Bot Op can delete events
+    organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
+    bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
     
-    if not (head_organizer_role or head_helper_role or helper_team_role):
-        await interaction.response.send_message("❌ You need **Head Organizer**, **Head Helper** or **Helper Team** role to delete events.", ephemeral=True)
+    if not (organizer_role or bot_op_role):
+        await interaction.response.send_message("❌ You need **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
         return
     
     try:
@@ -1960,7 +1958,7 @@ async def event_delete(interaction: discord.Interaction):
                     inline=False
                 )
                 
-                embed.set_footer(text="Event Management • 😈The Devil's Spot😈")
+                embed.set_footer(text=f"Event Management • {ORGANIZATION_NAME}")
                 
                 await select_interaction.response.edit_message(embed=embed, view=None)
         
@@ -1978,7 +1976,7 @@ async def event_delete(interaction: discord.Interaction):
             inline=False
         )
         
-        embed.set_footer(text="Event Management • 😈The Devil's Spot😈")
+        embed.set_footer(text=f"Event Management • {ORGANIZATION_NAME}")
         
         view = EventDeleteView()
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)

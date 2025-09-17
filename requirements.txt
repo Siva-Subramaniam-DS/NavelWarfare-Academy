@@ -1,0 +1,23 @@
+# Discord Bot Requirements - Optimized for Railway Deployment
+
+# Core Discord library
+discord.py>=2.3.0
+
+# Environment variable management
+python-dotenv>=1.0.0
+
+# Date and time utilities
+pytz>=2023.3
+
+# Image processing (lightweight)
+Pillow>=10.0.0
+
+# HTTP requests for Google Fonts API
+requests>=2.31.0
+
+# Essential only - removed heavy dependencies that might cause timeout:
+# - pandas (large dependency)
+# - numpy (large dependency) 
+# - asyncio-throttle (not essential)
+# - colorlog (not essential)
+# - gunicorn (not needed for Discord bots)

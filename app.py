@@ -25,8 +25,8 @@ load_dotenv()
 
 # Channel IDs for event management
 CHANNEL_IDS = {
-    "take_schedule": 1281967703506026538,    # Schedule channel for posting match schedules
-    "results": 1281967638360359067,          # Results channel for posting match outcomes
+    "take_schedule": 1281967638360359067,    # Schedule channel for posting match schedules
+    "results": 1281967703506026538,          # Results channel for posting match outcomes
     "staff_attendance": 1378979992641339403  # Attendance channel for staff tracking
 }
 

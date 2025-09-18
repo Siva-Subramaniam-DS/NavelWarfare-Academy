@@ -1105,49 +1105,253 @@ async def on_ready():
     
     print("🎯 Bot is ready to receive commands!")
 
-@tree.command(name="help", description="Show all available Event Management slash commands")
+# ===========================================================================================
+# ENHANCED HELP COMMAND SYSTEM
+# ===========================================================================================
+
+# Command data structure with detailed information
+COMMAND_DATA = {
+    "system": {
+        "title": "⚙️ System Commands",
+        "description": "Basic bot functionality available to all users",
+        "commands": [
+            {
+                "name": "/help",
+                "description": "Display this comprehensive command guide with role-based filtering",
+                "usage": "/help",
+                "permissions": "everyone",
+                "example": "Simply type `/help` to see available commands"
+            },
+            {
+                "name": "/rules",
+                "description": "View tournament rules (or manage them if you're an organizer)",
+                "usage": "/rules",
+                "permissions": "everyone (view) / organizer (manage)",
+                "example": "Use `/rules` to view current tournament rules"
+            }
+        ]
+    },
+    "utility": {
+        "title": "🛠️ Utility Commands",
+        "description": "Helpful tools for tournament management",
+        "commands": [
+            {
+                "name": "/team_balance",
+                "description": "Balance two teams based on player skill levels",
+                "usage": "/team_balance team1_players:<players> team2_players:<players>",
+                "permissions": "everyone",
+                "example": "Example: `/team_balance team1_players:Player1,Player2 team2_players:Player3,Player4`"
+            },
+            {
+                "name": "/time",
+                "description": "Generate a random match time between 12:00-17:59 UTC",
+                "usage": "/time",
+                "permissions": "everyone",
+                "example": "Use `/time` to get a random tournament match time"
+            },
+            {
+                "name": "/choose",
+                "description": "Make a random choice from comma-separated options",
+                "usage": "/choose options:<option1,option2,option3>",
+                "permissions": "everyone",
+                "example": "Example: `/choose options:Map1,Map2,Map3` to randomly select a map"
+            }
+        ]
+    },
+    "event_management": {
+        "title": "🏆 Event Management",
+        "description": "Tournament event creation and management (requires special permissions)",
+        "commands": [
+            {
+                "name": "/event-create",
+                "description": "Create new tournament events with automatic scheduling",
+                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> date_time:<YYYY-MM-DD HH:MM>",
+                "permissions": "organizer / bot_op",
+                "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 date_time:2024-12-25 15:30`"
+            },
+            {
+                "name": "/event-result",
+                "description": "Record match results and update tournament standings",
+                "usage": "/event-result",
+                "permissions": "organizer / judge",
+                "example": "Use `/event-result` and follow the interactive prompts to record match outcomes"
+            },
+            {
+                "name": "/event-delete",
+                "description": "Delete scheduled events (use with caution)",
+                "usage": "/event-delete",
+                "permissions": "organizer / bot_op",
+                "example": "Use `/event-delete` and select from scheduled events to remove"
+            }
+        ]
+    },
+    "judge": {
+        "title": "👨‍⚖️ Judge Commands",
+        "description": "Special commands for tournament judges",
+        "commands": [
+            {
+                "name": "Take Schedule Button",
+                "description": "Click the 'Take Schedule' button on event posts to assign yourself as judge",
+                "usage": "Click button on event announcements",
+                "permissions": "judge / organizer",
+                "example": "Look for green 'Take Schedule' buttons in the schedule channel"
+            },
+            {
+                "name": "/event-result",
+                "description": "Record official match results as an assigned judge",
+                "usage": "/event-result",
+                "permissions": "judge / organizer",
+                "example": "Use after completing a match you judged to record the official result"
+            }
+        ]
+    }
+}
+
+def get_user_permission_level(user_roles) -> str:
+    """Determine user's permission level based on their Discord roles"""
+    try:
+        role_ids = [role.id for role in user_roles]
+        
+        if ROLE_IDS["organizer"] in role_ids:
+            return "organizer"
+        elif ROLE_IDS["bot_op"] in role_ids:
+            return "bot_op"
+        elif ROLE_IDS["judge"] in role_ids:
+            return "judge"
+        else:
+            return "user"
+    except Exception as e:
+        print(f"Error determining user permission level: {e}")
+        return "user"  # Default to basic user permissions
+
+def filter_commands_by_permission(permission_level: str) -> dict:
+    """Filter command data based on user's permission level"""
+    try:
+        filtered_data = {}
+        
+        # Always include system and utility commands for everyone
+        filtered_data["system"] = COMMAND_DATA["system"]
+        filtered_data["utility"] = COMMAND_DATA["utility"]
+        
+        # Add role-specific commands based on permission level
+        if permission_level in ["organizer", "bot_op"]:
+            # Organizers and bot ops get all commands
+            filtered_data["event_management"] = COMMAND_DATA["event_management"]
+            filtered_data["judge"] = COMMAND_DATA["judge"]
+        elif permission_level == "judge":
+            # Judges get judge commands and can see some event management
+            filtered_data["judge"] = COMMAND_DATA["judge"]
+            # Show limited event management (only event-result)
+            judge_event_commands = {
+                "title": "🏆 Event Management (Judge Access)",
+                "description": "Event commands available to judges",
+                "commands": [cmd for cmd in COMMAND_DATA["event_management"]["commands"] 
+                           if cmd["name"] == "/event-result"]
+            }
+            if judge_event_commands["commands"]:
+                filtered_data["event_management"] = judge_event_commands
+        
+        return filtered_data
+    except Exception as e:
+        print(f"Error filtering commands by permission: {e}")
+        # Return basic commands as fallback
+        return {
+            "system": COMMAND_DATA["system"],
+            "utility": COMMAND_DATA["utility"]
+        }
+
+def build_help_embed(permission_level: str, user_name: str) -> discord.Embed:
+    """Build a comprehensive help embed based on user's permission level"""
+    try:
+        # Get filtered commands for this user
+        filtered_commands = filter_commands_by_permission(permission_level)
+        
+        # Create main embed
+        embed = discord.Embed(
+            title="🎯 Naval Warfare Academy Tournament System",
+            description=f"**Command Guide** - Showing commands available to you\n*Permission Level: {permission_level.title()}*",
+            color=discord.Color.blue(),
+            timestamp=discord.utils.utcnow()
+        )
+        
+        # Add command categories
+        for category_key, category_data in filtered_commands.items():
+            commands_text = ""
+            
+            for cmd in category_data["commands"]:
+                # Format command entry
+                commands_text += f"**{cmd['name']}**\n"
+                commands_text += f"└ {cmd['description']}\n"
+                commands_text += f"└ *Permissions: {cmd['permissions']}*\n"
+                if cmd.get('example'):
+                    commands_text += f"└ 💡 {cmd['example']}\n"
+                commands_text += "\n"
+            
+            # Add field to embed (Discord has a 1024 character limit per field)
+            if len(commands_text) > 1024:
+                # Split long content into multiple fields
+                parts = []
+                current_part = ""
+                for line in commands_text.split('\n'):
+                    if len(current_part + line + '\n') > 1024:
+                        parts.append(current_part.strip())
+                        current_part = line + '\n'
+                    else:
+                        current_part += line + '\n'
+                if current_part.strip():
+                    parts.append(current_part.strip())
+                
+                for i, part in enumerate(parts):
+                    field_name = category_data["title"] if i == 0 else f"{category_data['title']} (cont.)"
+                    embed.add_field(name=field_name, value=part, inline=False)
+            else:
+                embed.add_field(
+                    name=category_data["title"],
+                    value=commands_text.strip(),
+                    inline=False
+                )
+        
+        # Add helpful footer
+        embed.add_field(
+            name="💡 Need Help?",
+            value="• Commands marked with role requirements need special permissions\n• Contact an organizer if you need access to additional commands\n• Use `/rules` to view current tournament rules",
+            inline=False
+        )
+        
+        embed.set_footer(text=f"{TOURNAMENT_SYSTEM_NAME} • Requested by {user_name}")
+        
+        return embed
+        
+    except Exception as e:
+        print(f"Error building help embed: {e}")
+        # Return basic fallback embed
+        fallback_embed = discord.Embed(
+            title="🎯 Help Command",
+            description="Error loading detailed help. Basic commands:\n`/help` - This command\n`/rules` - View rules",
+            color=discord.Color.red()
+        )
+        return fallback_embed
+
+@tree.command(name="help", description="Show available commands based on your permissions")
 async def help_command(interaction: discord.Interaction):
-    embed = discord.Embed(
-        title="🎯 Event Management Bot - Command Guide",
-        description="Complete list of available slash commands for event management.",
-        color=discord.Color.blue()
-    )
-
-    # System Commands
-    embed.add_field(
-        name="⚙️ **System Commands**",
-        value=(
-            "`/help` - Display this command guide\n"
-            "`/rules` - Manage or view tournament rules"
-        ),
-        inline=False
-    )
-
-    # Event Management
-    embed.add_field(
-        name="🏆 **Event Management**",
-        value=(
-            "`/event-create` - Create tournament events (Head Organizer/Head Helper/Helper Team)\n"
-            "`/event-result` - Record event results (Head Organizer/Judge)\n"
-            "`/event-delete` - Delete scheduled events (Head Organizer/Head Helper/Helper Team)"
-        ),
-        inline=False
-    )
-
-    # Utility Commands
-    embed.add_field(
-        name="⚖️ **Utility Commands**",
-        value=(
-            "`/team_balance` - Balance teams by player levels\n"
-            "`/time` - Generate random match time (12:00-17:59 UTC)\n"
-            "`/choose` - Random choice from comma-separated options"
-        ),
-        inline=False
-    )
-
-    embed.set_footer(text="🎯 Event Management System • Powered by Discord.py")
-    
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    """Enhanced help command with role-based filtering and detailed information"""
+    try:
+        # Determine user's permission level
+        permission_level = get_user_permission_level(interaction.user.roles)
+        
+        # Build appropriate help embed
+        embed = build_help_embed(permission_level, interaction.user.display_name)
+        
+        # Send ephemeral response
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        
+    except Exception as e:
+        print(f"Error in enhanced help command: {e}")
+        # Fallback response
+        await interaction.response.send_message(
+            "❌ An error occurred while loading the help command. Please try again or contact an administrator.",
+            ephemeral=True
+        )
 
 @tree.command(name="rules", description="Manage or view tournament rules")
 async def rules_command(interaction: discord.Interaction):
@@ -1580,21 +1784,57 @@ async def event_result(
     embed.set_footer(text=f"Event Results • {ORGANIZATION_NAME}")
     
     # Send confirmation to user
-    await interaction.followup.send("✅ Event results posted to Results channel and Staff Attendance logged!", ephemeral=True)
+    await interaction.followup.send("✅ Event results posted to Results channel, current channel, and Staff Attendance logged!", ephemeral=True)
     
     # Post in Results channel with screenshots as attachments
+    results_posted = False
     try:
         results_channel = interaction.guild.get_channel(CHANNEL_IDS["results"])
         if results_channel:
             if files_to_send:
-                # Send as attachments + single embed so Discord shows gallery above embed
-                await results_channel.send(embed=embed, files=files_to_send)
+                # Create copies of files for results channel (files can only be used once)
+                results_files = []
+                for file_obj in files_to_send:
+                    file_obj.fp.seek(0)  # Reset file pointer
+                    file_data = file_obj.fp.read()
+                    results_files.append(discord.File(
+                        fp=io.BytesIO(file_data),
+                        filename=file_obj.filename
+                    ))
+                await results_channel.send(embed=embed, files=results_files)
             else:
                 await results_channel.send(embed=embed)
+            results_posted = True
         else:
             await interaction.followup.send("⚠️ Could not find Results channel.", ephemeral=True)
     except Exception as e:
         await interaction.followup.send(f"⚠️ Could not post in Results channel: {e}", ephemeral=True)
+    
+    # Post in current channel (where command was executed)
+    try:
+        current_channel = interaction.channel
+        if current_channel and current_channel.id != CHANNEL_IDS["results"]:  # Don't duplicate if already in results channel
+            if files_to_send:
+                # Reset file pointers and create new file objects for current channel
+                current_files = []
+                for file_obj in files_to_send:
+                    file_obj.fp.seek(0)  # Reset file pointer
+                    file_data = file_obj.fp.read()
+                    current_files.append(discord.File(
+                        fp=io.BytesIO(file_data),
+                        filename=file_obj.filename
+                    ))
+                await current_channel.send(embed=embed, files=current_files)
+            else:
+                await current_channel.send(embed=embed)
+        elif current_channel and current_channel.id == CHANNEL_IDS["results"] and not results_posted:
+            # If we're in results channel but posting failed above, try again
+            if files_to_send:
+                await current_channel.send(embed=embed, files=files_to_send)
+            else:
+                await current_channel.send(embed=embed)
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ Could not post in current channel: {e}", ephemeral=True)
 
     # Winner-only summary removed per request
     

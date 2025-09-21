@@ -30,12 +30,15 @@ CHANNEL_IDS = {
     "staff_attendance": 1378979992641339403  # Attendance channel for staff tracking
 }
 
+# Bot owner ID - has access to all commands
+BOT_OWNER_ID = 1251442077561131059
+
 # Role IDs for permissions
 ROLE_IDS = {
-    "owner": 1251442077561131059,         # Owner role (full access to all commands)
     "judge": 1261723119257915412,        # Judge role
     "bot_op": 1242280627991220275,       # Bot operator role (like helper head and helper team)
-    "organizer": 1314905337437880340     # Organizer role
+    "organizer": 1314905337437880340,    # Organizer role
+    "bot_admin": 1242280443898761236     # Bot admin role (full server permissions)
 }
 
 # Branding constants
@@ -164,9 +167,8 @@ def set_rules_content(content, user_id, username):
 
 def has_organizer_permission(interaction):
     """Check if user has organizer permissions for rule management"""
-    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
-    return owner_role is not None or organizer_role is not None
+    return organizer_role is not None
 
 # Embed field utility functions for safe Discord.py embed manipulation
 def find_field_index(embed: discord.Embed, field_name: str) -> int:
@@ -263,6 +265,31 @@ def update_embed_title_with_checkmark(embed: discord.Embed) -> bool:
         print(f"Error updating embed title with checkmark: {e}")
         return False
 
+def check_bot_permissions(channel: discord.TextChannel) -> dict:
+    """Check if bot has necessary permissions in a channel"""
+    if not channel:
+        return {"can_edit": False, "reason": "Channel not found"}
+    
+    bot_member = channel.guild.me
+    if not bot_member:
+        return {"can_edit": False, "reason": "Bot not found in guild"}
+    
+    permissions = channel.permissions_for(bot_member)
+    
+    required_perms = {
+        "read_messages": permissions.read_messages,
+        "send_messages": permissions.send_messages,
+        "embed_links": permissions.embed_links,
+        "read_message_history": permissions.read_message_history
+    }
+    
+    missing_perms = [perm for perm, has_perm in required_perms.items() if not has_perm]
+    
+    if missing_perms:
+        return {"can_edit": False, "reason": f"Missing permissions: {', '.join(missing_perms)}"}
+    
+    return {"can_edit": True, "reason": "All permissions available"}
+
 def can_judge_take_schedule(judge_id: int, max_assignments: int = 3) -> tuple[bool, str]:
     """Check if a judge can take another schedule"""
     if judge_id not in judge_assignments:
@@ -304,13 +331,13 @@ class TakeScheduleButton(View):
             await interaction.response.send_message("⏳ Another judge is currently taking this schedule. Please wait a moment.", ephemeral=True)
             return
             
-        # Check if user has Owner, Judge or Organizer role
-        owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
-        organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
-        judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
-        if not (owner_role or organizer_role or judge_role):
-            await interaction.response.send_message("❌ You need **Owner**, **Organizer** or **Judge** role to take this schedule.", ephemeral=True)
-            return
+        # Check if user has Judge or Organizer role, or is Bot Owner
+        if interaction.user.id != BOT_OWNER_ID:
+            organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
+            judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
+            if not (organizer_role or judge_role):
+                await interaction.response.send_message("❌ You need **Organizer** or **Judge** role to take this schedule.", ephemeral=True)
+                return
             
         # Check if already taken
         if self.judge:
@@ -362,7 +389,15 @@ class TakeScheduleButton(View):
                 return
             
             # Update the message with the updated take button only
-            await interaction.message.edit(embed=embed, view=self)
+            try:
+                await interaction.message.edit(embed=embed, view=self)
+            except discord.Forbidden:
+                await interaction.followup.send("❌ Bot doesn't have permission to edit messages in this channel.", ephemeral=True)
+                return
+            except Exception as e:
+                print(f"Error editing message: {e}")
+                await interaction.followup.send("❌ Failed to update message.", ephemeral=True)
+                return
             
             # Send success message
             await interaction.followup.send("✅ You have successfully taken this schedule!", ephemeral=True)
@@ -1098,18 +1133,16 @@ def calculate_time_difference(event_datetime: datetime.datetime, user_timezone: 
     }
 
 def has_event_create_permission(interaction):
-    """Check if user has permission to create events (Owner, Organizer or Bot Op)"""
-    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
+    """Check if user has permission to create events (Organizer or Bot Op)"""
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
-    return owner_role is not None or organizer_role is not None or bot_op_role is not None
+    return organizer_role is not None or bot_op_role is not None
 
 def has_event_result_permission(interaction):
-    """Check if user has permission to post event results (Owner, Organizer or Judge)"""
-    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
+    """Check if user has permission to post event results (Organizer or Judge)"""
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
-    return owner_role is not None or organizer_role is not None or judge_role is not None
+    return organizer_role is not None or judge_role is not None
 
 @bot.event
 async def on_ready():
@@ -1952,8 +1985,13 @@ async def event_result(
                                     embed = schedule_message.embeds[0]
                                     # Update title with checkmark
                                     if update_embed_title_with_checkmark(embed):
-                                        await schedule_message.edit(embed=embed)
-                                        print(f"Updated schedule title with checkmark for event {ev_id}")
+                                        try:
+                                            await schedule_message.edit(embed=embed)
+                                            print(f"Updated schedule title with checkmark for event {ev_id}")
+                                        except discord.Forbidden:
+                                            print(f"Bot doesn't have permission to edit message in channel {schedule_channel.name}")
+                                        except Exception as edit_error:
+                                            print(f"Error editing schedule message for event {ev_id}: {edit_error}")
                             except discord.NotFound:
                                 print(f"Schedule message not found for event {ev_id}")
                             except Exception as e:
@@ -1979,8 +2017,13 @@ async def event_result(
                             if (winner.display_name in description and loser.display_name in description) or \
                                (winner.mention in description and loser.mention in description):
                                 if update_embed_title_with_checkmark(embed):
-                                    await message.edit(embed=embed)
-                                    print(f"Updated current channel schedule title with checkmark")
+                                    try:
+                                        await message.edit(embed=embed)
+                                        print(f"Updated current channel schedule title with checkmark")
+                                    except discord.Forbidden:
+                                        print(f"Bot doesn't have permission to edit message in current channel")
+                                    except Exception as edit_error:
+                                        print(f"Error editing current channel message: {edit_error}")
                                 break
         except Exception as e:
             print(f"Error updating current channel schedule title: {e}")
@@ -2121,14 +2164,13 @@ async def choose(interaction: discord.Interaction, options: str):
 async def unassigned_events(interaction: discord.Interaction):
     """Show all scheduled events that do not currently have a judge assigned."""
     try:
-        # Allow Owner, Organizer, Bot Op, and Judges to view
-        owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"]) if interaction.user else None
+        # Allow Organizer, Bot Op, and Judges to view
         organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"]) if interaction.user else None
         bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"]) if interaction.user else None
         judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"]) if interaction.user else None
 
-        if not (owner_role or organizer_role or bot_op_role or judge_role):
-            await interaction.response.send_message("❌ You need Owner, Organizer or Judge role to view unassigned events.", ephemeral=True)
+        if not (organizer_role or bot_op_role or judge_role):
+            await interaction.response.send_message("❌ You need Organizer or Judge role to view unassigned events.", ephemeral=True)
             return
 
         # Build list of unassigned events
@@ -2200,13 +2242,12 @@ async def unassigned_events(interaction: discord.Interaction):
 
 @tree.command(name="event-delete", description="Delete a scheduled event (Head Organizer/Head Helper/Helper Team only)")
 async def event_delete(interaction: discord.Interaction):
-    # Check permissions - only Owner, Organizer or Bot Op can delete events
-    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
+    # Check permissions - only Organizer or Bot Op can delete events
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
     
-    if not (owner_role or organizer_role or bot_op_role):
-        await interaction.response.send_message("❌ You need **Owner**, **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
+    if not (organizer_role or bot_op_role):
+        await interaction.response.send_message("❌ You need **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
         return
     
     try:

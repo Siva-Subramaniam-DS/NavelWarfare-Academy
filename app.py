@@ -262,7 +262,6 @@ def update_embed_title_with_checkmark(embed: discord.Embed) -> bool:
     except Exception as e:
         print(f"Error updating embed title with checkmark: {e}")
         return False
-        return False
 
 def can_judge_take_schedule(judge_id: int, max_assignments: int = 3) -> tuple[bool, str]:
     """Check if a judge can take another schedule"""
@@ -1964,6 +1963,27 @@ async def event_result(
             
             await schedule_event_cleanup(ev_id, delay_hours=36)
             scheduled_any = True
+        
+        # Also update any schedule messages in the current channel
+        try:
+            current_channel = interaction.channel
+            if current_channel:
+                # Look for recent messages in current channel that might be schedule messages
+                async for message in current_channel.history(limit=50):
+                    if message.embeds and message.author == bot.user:
+                        embed = message.embeds[0]
+                        # Check if this looks like a schedule message with green circle
+                        if embed.title and embed.title.startswith("🟢"):
+                            # Check if this matches our winner/loser
+                            description = embed.description or ""
+                            if (winner.display_name in description and loser.display_name in description) or \
+                               (winner.mention in description and loser.mention in description):
+                                if update_embed_title_with_checkmark(embed):
+                                    await message.edit(embed=embed)
+                                    print(f"Updated current channel schedule title with checkmark")
+                                break
+        except Exception as e:
+            print(f"Error updating current channel schedule title: {e}")
 
         if scheduled_any:
             await interaction.followup.send("🧹 Auto-cleanup scheduled: Related event(s) will be removed after 36 hours.", ephemeral=True)

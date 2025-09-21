@@ -32,6 +32,7 @@ CHANNEL_IDS = {
 
 # Role IDs for permissions
 ROLE_IDS = {
+    "owner": 1251442077561131059,         # Owner role (full access to all commands)
     "judge": 1261723119257915412,        # Judge role
     "bot_op": 1242280627991220275,       # Bot operator role (like helper head and helper team)
     "organizer": 1314905337437880340     # Organizer role
@@ -163,8 +164,9 @@ def set_rules_content(content, user_id, username):
 
 def has_organizer_permission(interaction):
     """Check if user has organizer permissions for rule management"""
+    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
-    return organizer_role is not None
+    return owner_role is not None or organizer_role is not None
 
 # Embed field utility functions for safe Discord.py embed manipulation
 def find_field_index(embed: discord.Embed, field_name: str) -> int:
@@ -215,6 +217,53 @@ def remove_judge_field(embed: discord.Embed) -> bool:
         print(f"Error removing judge field: {e}")
         return False
 
+def add_green_circle_to_title(title: str) -> str:
+    """Add green circle emoji to the beginning of title if not already present"""
+    green_circle = "🟢"
+    
+    # Check if already has green circle
+    if title and title.startswith(green_circle):
+        return title
+    
+    # Add green circle to beginning
+    return green_circle + (title or "")
+
+def update_embed_title_with_green_circle(embed: discord.Embed) -> bool:
+    """Update embed title with green circle, returns success status"""
+    try:
+        if embed.title:
+            new_title = add_green_circle_to_title(embed.title)
+            embed.title = new_title
+            return True
+        return False
+    except Exception as e:
+        print(f"Error updating embed title with green circle: {e}")
+        return False
+
+def replace_green_circle_with_checkmark(title: str) -> str:
+    """Replace green circle emoji with checkmark emoji in title"""
+    green_circle = "🟢"
+    checkmark = "✅"
+    
+    if title and title.startswith(green_circle):
+        return checkmark + title[len(green_circle):]
+    
+    # If no green circle, just add checkmark at the beginning
+    return checkmark + (title or "")
+
+def update_embed_title_with_checkmark(embed: discord.Embed) -> bool:
+    """Update embed title with checkmark, returns success status"""
+    try:
+        if embed.title:
+            new_title = replace_green_circle_with_checkmark(embed.title)
+            embed.title = new_title
+            return True
+        return False
+    except Exception as e:
+        print(f"Error updating embed title with checkmark: {e}")
+        return False
+        return False
+
 def can_judge_take_schedule(judge_id: int, max_assignments: int = 3) -> tuple[bool, str]:
     """Check if a judge can take another schedule"""
     if judge_id not in judge_assignments:
@@ -256,11 +305,12 @@ class TakeScheduleButton(View):
             await interaction.response.send_message("⏳ Another judge is currently taking this schedule. Please wait a moment.", ephemeral=True)
             return
             
-        # Check if user has Judge or Organizer role
+        # Check if user has Owner, Judge or Organizer role
+        owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
         organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
         judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
-        if not (organizer_role or judge_role):
-            await interaction.response.send_message("❌ You need **Organizer** or **Judge** role to take this schedule.", ephemeral=True)
+        if not (owner_role or organizer_role or judge_role):
+            await interaction.response.send_message("❌ You need **Owner**, **Organizer** or **Judge** role to take this schedule.", ephemeral=True)
             return
             
         # Check if already taken
@@ -301,6 +351,11 @@ class TakeScheduleButton(View):
             # Update the embed
             embed = interaction.message.embeds[0]
             embed.color = discord.Color.green()
+            
+            # Update title with green circle
+            title_update_success = update_embed_title_with_green_circle(embed)
+            if not title_update_success:
+                print(f"Warning: Failed to update title for event {self.event_id}")
             
             # Update judge field using safe utility function
             if not update_judge_field(embed, interaction.user):
@@ -1044,16 +1099,18 @@ def calculate_time_difference(event_datetime: datetime.datetime, user_timezone: 
     }
 
 def has_event_create_permission(interaction):
-    """Check if user has permission to create events (Organizer or Bot Op)"""
+    """Check if user has permission to create events (Owner, Organizer or Bot Op)"""
+    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
-    return organizer_role is not None or bot_op_role is not None
+    return owner_role is not None or organizer_role is not None or bot_op_role is not None
 
 def has_event_result_permission(interaction):
-    """Check if user has permission to post event results (Organizer or Judge)"""
+    """Check if user has permission to post event results (Owner, Organizer or Judge)"""
+    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
-    return organizer_role is not None or judge_role is not None
+    return owner_role is not None or organizer_role is not None or judge_role is not None
 
 @bot.event
 async def on_ready():
@@ -1138,9 +1195,9 @@ COMMAND_DATA = {
             {
                 "name": "/team_balance",
                 "description": "Balance two teams based on player skill levels",
-                "usage": "/team_balance team1_players:<players> team2_players:<players>",
+                "usage": "/team_balance levels:<comma-separated levels>",
                 "permissions": "everyone",
-                "example": "Example: `/team_balance team1_players:Player1,Player2 team2_players:Player3,Player4`"
+                "example": "Example: `/team_balance levels:48,50,51,35,51,50,50,37,51,52`"
             },
             {
                 "name": "/time",
@@ -1164,17 +1221,19 @@ COMMAND_DATA = {
         "commands": [
             {
                 "name": "/event-create",
-                "description": "Create new tournament events with automatic scheduling",
-                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> date_time:<YYYY-MM-DD HH:MM>",
-                "permissions": "organizer / bot_op",
-                "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 date_time:2024-12-25 15:30`"
+                "description": "Create new tournament events with automatic scheduling and round selection",
+                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> date_time:<YYYY-MM-DD HH:MM> round:<round>",
+                "permissions": "owner / organizer / bot_op",
+                "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 date_time:2024-12-25 15:30 round:R1`",
+                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Bronze Final"
             },
             {
                 "name": "/event-result",
-                "description": "Record match results and update tournament standings",
-                "usage": "/event-result",
+                "description": "Record match results and update tournament standings with round specification",
+                "usage": "/event-result winner:<@user> loser:<@user> round:<round>",
                 "permissions": "organizer / judge",
-                "example": "Use `/event-result` and follow the interactive prompts to record match outcomes"
+                "example": "Use `/event-result` and follow the interactive prompts to record match outcomes with round selection",
+                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Bronze Final"
             },
             {
                 "name": "/event-delete",
@@ -1198,10 +1257,11 @@ COMMAND_DATA = {
             },
             {
                 "name": "/event-result",
-                "description": "Record official match results as an assigned judge",
-                "usage": "/event-result",
+                "description": "Record official match results as an assigned judge with round specification",
+                "usage": "/event-result winner:<@user> loser:<@user> round:<round>",
                 "permissions": "judge / organizer",
-                "example": "Use after completing a match you judged to record the official result"
+                "example": "Use after completing a match you judged to record the official result with round selection",
+                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Bronze Final"
             }
         ]
     }
@@ -1212,7 +1272,9 @@ def get_user_permission_level(user_roles) -> str:
     try:
         role_ids = [role.id for role in user_roles]
         
-        if ROLE_IDS["organizer"] in role_ids:
+        if ROLE_IDS["owner"] in role_ids:
+            return "owner"
+        elif ROLE_IDS["organizer"] in role_ids:
             return "organizer"
         elif ROLE_IDS["bot_op"] in role_ids:
             return "bot_op"
@@ -1234,8 +1296,8 @@ def filter_commands_by_permission(permission_level: str) -> dict:
         filtered_data["utility"] = COMMAND_DATA["utility"]
         
         # Add role-specific commands based on permission level
-        if permission_level in ["organizer", "bot_op"]:
-            # Organizers and bot ops get all commands
+        if permission_level in ["owner", "organizer", "bot_op"]:
+            # Owners, organizers and bot ops get all commands
             filtered_data["event_management"] = COMMAND_DATA["event_management"]
             filtered_data["judge"] = COMMAND_DATA["judge"]
         elif permission_level == "judge":
@@ -1283,6 +1345,8 @@ def build_help_embed(permission_level: str, user_name: str) -> discord.Embed:
                 commands_text += f"**{cmd['name']}**\n"
                 commands_text += f"└ {cmd['description']}\n"
                 commands_text += f"└ *Permissions: {cmd['permissions']}*\n"
+                if cmd.get('round_options'):
+                    commands_text += f"└ 🎯 **Round Options:** {cmd['round_options']}\n"
                 if cmd.get('example'):
                     commands_text += f"└ 💡 {cmd['example']}\n"
                 commands_text += "\n"
@@ -1873,6 +1937,31 @@ async def event_result(
 
         scheduled_any = False
         for ev_id in matching_event_ids:
+            # Update the original schedule message title with checkmark
+            try:
+                event_data = scheduled_events.get(ev_id)
+                if event_data:
+                    schedule_channel_id = event_data.get('schedule_channel_id')
+                    schedule_message_id = event_data.get('schedule_message_id')
+                    
+                    if schedule_channel_id and schedule_message_id:
+                        schedule_channel = interaction.guild.get_channel(schedule_channel_id)
+                        if schedule_channel:
+                            try:
+                                schedule_message = await schedule_channel.fetch_message(schedule_message_id)
+                                if schedule_message.embeds:
+                                    embed = schedule_message.embeds[0]
+                                    # Update title with checkmark
+                                    if update_embed_title_with_checkmark(embed):
+                                        await schedule_message.edit(embed=embed)
+                                        print(f"Updated schedule title with checkmark for event {ev_id}")
+                            except discord.NotFound:
+                                print(f"Schedule message not found for event {ev_id}")
+                            except Exception as e:
+                                print(f"Error updating schedule title for event {ev_id}: {e}")
+            except Exception as e:
+                print(f"Error processing title update for event {ev_id}: {e}")
+            
             await schedule_event_cleanup(ev_id, delay_hours=36)
             scheduled_any = True
 
@@ -2012,13 +2101,14 @@ async def choose(interaction: discord.Interaction, options: str):
 async def unassigned_events(interaction: discord.Interaction):
     """Show all scheduled events that do not currently have a judge assigned."""
     try:
-        # Allow Organizer, Bot Op, and Judges to view
+        # Allow Owner, Organizer, Bot Op, and Judges to view
+        owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"]) if interaction.user else None
         organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"]) if interaction.user else None
         bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"]) if interaction.user else None
         judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"]) if interaction.user else None
 
-        if not (organizer_role or bot_op_role or judge_role):
-            await interaction.response.send_message("❌ You need Organizer or Judge role to view unassigned events.", ephemeral=True)
+        if not (owner_role or organizer_role or bot_op_role or judge_role):
+            await interaction.response.send_message("❌ You need Owner, Organizer or Judge role to view unassigned events.", ephemeral=True)
             return
 
         # Build list of unassigned events
@@ -2090,12 +2180,13 @@ async def unassigned_events(interaction: discord.Interaction):
 
 @tree.command(name="event-delete", description="Delete a scheduled event (Head Organizer/Head Helper/Helper Team only)")
 async def event_delete(interaction: discord.Interaction):
-    # Check permissions - only Organizer or Bot Op can delete events
+    # Check permissions - only Owner, Organizer or Bot Op can delete events
+    owner_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["owner"])
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
     
-    if not (organizer_role or bot_op_role):
-        await interaction.response.send_message("❌ You need **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
+    if not (owner_role or organizer_role or bot_op_role):
+        await interaction.response.send_message("❌ You need **Owner**, **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
         return
     
     try:

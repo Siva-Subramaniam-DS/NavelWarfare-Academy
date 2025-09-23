@@ -345,7 +345,7 @@ class TakeScheduleButton(View):
             return
         
         # Check if judge can take more schedules
-        can_take, error_message = can_judge_take_schedule(interaction.user.id, max_assignments=3)
+        can_take, error_message = can_judge_take_schedule(interaction.user.id, max_assignments=7)
         if not can_take:
             await interaction.response.send_message(f"❌ {error_message}", ephemeral=True)
             return

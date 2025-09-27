@@ -166,7 +166,11 @@ def set_rules_content(content, user_id, username):
     return save_rules()
 
 def has_organizer_permission(interaction):
-    """Check if user has organizer permissions for rule management"""
+    """Check if user has organizer permissions for rule management (Bot Owner or Organizer)"""
+    # Bot Owner bypass
+    if interaction.user.id == BOT_OWNER_ID:
+        return True
+    
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     return organizer_role is not None
 
@@ -1133,13 +1137,21 @@ def calculate_time_difference(event_datetime: datetime.datetime, user_timezone: 
     }
 
 def has_event_create_permission(interaction):
-    """Check if user has permission to create events (Organizer or Bot Op)"""
+    """Check if user has permission to create events (Bot Owner, Organizer or Bot Op)"""
+    # Bot Owner bypass
+    if interaction.user.id == BOT_OWNER_ID:
+        return True
+    
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
     return organizer_role is not None or bot_op_role is not None
 
 def has_event_result_permission(interaction):
-    """Check if user has permission to post event results (Organizer or Judge)"""
+    """Check if user has permission to post event results (Bot Owner, Organizer or Judge)"""
+    # Bot Owner bypass
+    if interaction.user.id == BOT_OWNER_ID:
+        return True
+    
     organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
     judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"])
     return organizer_role is not None or judge_role is not None
@@ -1253,26 +1265,49 @@ COMMAND_DATA = {
         "commands": [
             {
                 "name": "/event-create",
-                "description": "Create new tournament events with automatic scheduling and round selection",
-                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> date_time:<YYYY-MM-DD HH:MM> round:<round>",
+                "description": "Create new tournament events with Group support, Winner/Loser options, and automatic scheduling",
+                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> hour:<0-23> minute:<0-59> date:<1-31> month:<1-12> round:<round> tournament:<name> [group:<A-J/Winner/Loser>] [winner:<@user>] [loser:<@user>]",
                 "permissions": "owner / organizer / bot_op",
-                "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 date_time:2024-12-25 15:30 round:R1`",
-                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Bronze Final"
+                "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 hour:15 minute:30 date:25 month:12 round:R1 tournament:Summer Cup group:Group A`",
+                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
+                "group_options": "Group A, Group B, Group C, Group D, Group E, Group F, Group G, Group H, Group I, Group J, Winner, Loser"
+            },
+            {
+                "name": "/event-edit",
+                "description": "Edit existing events to correct mistakes without deleting and recreating",
+                "usage": "/event-edit",
+                "permissions": "owner / organizer / bot_op",
+                "example": "Use `/event-edit` to select and modify any scheduled event with pre-filled current values"
             },
             {
                 "name": "/event-result",
-                "description": "Record match results and update tournament standings with round specification",
-                "usage": "/event-result winner:<@user> loser:<@user> round:<round>",
+                "description": "Record match results with Group support and comprehensive tournament tracking",
+                "usage": "/event-result winner:<@user> winner_score:<score> loser:<@user> loser_score:<score> tournament:<name> round:<round> [group:<A-J/Winner/Loser>] [remarks:<text>] [screenshots:<1-11>]",
                 "permissions": "organizer / judge",
-                "example": "Use `/event-result` and follow the interactive prompts to record match outcomes with round selection",
-                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Bronze Final"
+                "example": "Use `/event-result` to record match outcomes with group information and screenshot evidence",
+                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
+                "group_options": "Group A, Group B, Group C, Group D, Group E, Group F, Group G, Group H, Group I, Group J, Winner, Loser"
             },
             {
                 "name": "/event-delete",
                 "description": "Delete scheduled events (use with caution)",
                 "usage": "/event-delete",
-                "permissions": "organizer / bot_op",
+                "permissions": "owner / organizer / bot_op",
                 "example": "Use `/event-delete` and select from scheduled events to remove"
+            },
+            {
+                "name": "/unassigned_events",
+                "description": "List all events without a judge assigned for easy management",
+                "usage": "/unassigned_events",
+                "permissions": "owner / organizer / judge",
+                "example": "Use `/unassigned_events` to see which matches still need judges"
+            },
+            {
+                "name": "/exchange_judge",
+                "description": "Exchange an old judge for a new judge for events in current channel",
+                "usage": "/exchange_judge old_judge:<@user> new_judge:<@user>",
+                "permissions": "owner / organizer / bot_op",
+                "example": "Use `/exchange_judge` to reassign judges for events in the current channel"
             }
         ]
     },
@@ -1289,11 +1324,19 @@ COMMAND_DATA = {
             },
             {
                 "name": "/event-result",
-                "description": "Record official match results as an assigned judge with round specification",
-                "usage": "/event-result winner:<@user> loser:<@user> round:<round>",
+                "description": "Record official match results with Group support and comprehensive tracking",
+                "usage": "/event-result winner:<@user> winner_score:<score> loser:<@user> loser_score:<score> tournament:<name> round:<round> [group:<A-J/Winner/Loser>] [remarks:<text>] [screenshots:<1-11>]",
                 "permissions": "judge / organizer",
-                "example": "Use after completing a match you judged to record the official result with round selection",
-                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Bronze Final"
+                "example": "Use after completing a match you judged to record the official result with group information and evidence",
+                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
+                "group_options": "Group A, Group B, Group C, Group D, Group E, Group F, Group G, Group H, Group I, Group J, Winner, Loser"
+            },
+            {
+                "name": "/unassigned_events",
+                "description": "View events without assigned judges to help with scheduling",
+                "usage": "/unassigned_events",
+                "permissions": "judge / organizer",
+                "example": "Use `/unassigned_events` to see which matches need judges"
             }
         ]
     }
@@ -1557,7 +1600,10 @@ async def event(interaction: discord.Interaction, action: app_commands.Choice[st
     date="Date of the event",
     month="Month of the event",
     round="Round label",
-    tournament="Tournament name (e.g. King of the Seas, Summer Cup, etc.)"
+    tournament="Tournament name (e.g. King of the Seas, Summer Cup, etc.)",
+    group="Group assignment (A-J) or Winner/Loser",
+    winner="Winner of the match (optional)",
+    loser="Loser of the match (optional)"
 )
 @app_commands.choices(
     round=[
@@ -1574,6 +1620,20 @@ async def event(interaction: discord.Interaction, action: app_commands.Choice[st
         app_commands.Choice(name="Qualifier", value="Qualifier"),
         app_commands.Choice(name="Semi Final", value="Semi Final"),
         app_commands.Choice(name="Final", value="Final"),
+    ],
+    group=[
+        app_commands.Choice(name="Group A", value="Group A"),
+        app_commands.Choice(name="Group B", value="Group B"),
+        app_commands.Choice(name="Group C", value="Group C"),
+        app_commands.Choice(name="Group D", value="Group D"),
+        app_commands.Choice(name="Group E", value="Group E"),
+        app_commands.Choice(name="Group F", value="Group F"),
+        app_commands.Choice(name="Group G", value="Group G"),
+        app_commands.Choice(name="Group H", value="Group H"),
+        app_commands.Choice(name="Group I", value="Group I"),
+        app_commands.Choice(name="Group J", value="Group J"),
+        app_commands.Choice(name="Winner", value="Winner"),
+        app_commands.Choice(name="Loser", value="Loser"),
     ]
 )
 async def event_create(
@@ -1585,7 +1645,10 @@ async def event_create(
     date: int,
     month: int,
     round: app_commands.Choice[str],
-    tournament: str
+    tournament: str,
+    group: app_commands.Choice[str] = None,
+    winner: discord.Member = None,
+    loser: discord.Member = None
 ):
     """Creates an event with the specified parameters"""
     
@@ -1627,6 +1690,9 @@ async def event_create(
     # Resolve round label from choice
     round_label = round.value if isinstance(round, app_commands.Choice) else str(round)
     
+    # Resolve group label from choice
+    group_label = group.value if group and isinstance(group, app_commands.Choice) else None
+    
     # Store event data for reminders
     scheduled_events[event_id] = {
         'title': f"Round {round_label} Match",
@@ -1634,12 +1700,15 @@ async def event_create(
         'time_str': time_info['utc_time'],
         'date_str': f"{date:02d}/{month:02d}",
         'round': round_label,
+        'group': group_label,
         'minutes_left': time_info['minutes_remaining'],
         'tournament': tournament,
         'judge': None,
         'channel_id': interaction.channel.id,
         'team1_captain': team_1_captain,
-        'team2_captain': team_2_captain
+        'team2_captain': team_2_captain,
+        'winner': winner,
+        'loser': loser
     }
     
     # Save events to file
@@ -1682,13 +1751,22 @@ async def event_create(
     # Tournament and Time Information
     # Create Discord timestamp for automatic timezone conversion
     timestamp = int(event_datetime.timestamp())
+    
+    # Build event details text
+    event_details = f"**Tournament:** {tournament}\n"
+    event_details += f"**UTC Time:** {time_info['utc_time']}\n"
+    event_details += f"**Local Time:** <t:{timestamp}:F> (<t:{timestamp}:R>)\n"
+    event_details += f"**Round:** {round_label}\n"
+    
+    # Add group if specified
+    if group_label:
+        event_details += f"**Group:** {group_label}\n"
+    
+    event_details += f"**Channel:** {interaction.channel.mention}"
+    
     embed.add_field(
         name="📋 Event Details", 
-        value=f"**Tournament:** {tournament}\n"
-              f"**UTC Time:** {time_info['utc_time']}\n"
-              f"**Local Time:** <t:{timestamp}:F> (<t:{timestamp}:R>)\n"
-              f"**Round:** {round_label}\n"
-              f"**Channel:** {interaction.channel.mention}",
+        value=event_details,
         inline=False
     )
     
@@ -1701,13 +1779,16 @@ async def event_create(
     captains_text += f"▪ Team2 Captain: {team_2_captain.mention} @{team_2_captain.name}"
     embed.add_field(name="👑 Team Captains", value=captains_text, inline=False)
     
-    # Add spacing
-    embed.add_field(name="\u200b", value="\u200b", inline=False)
+    # Add Winner/Loser section if provided
+    if winner or loser:
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
+        result_text = f"**Match Result**\n"
+        if winner:
+            result_text += f"🏆 Winner: {winner.mention} @{winner.name}\n"
+        if loser:
+            result_text += f"💀 Loser: {loser.mention} @{loser.name}"
+        embed.add_field(name="🏆 Match Result", value=result_text, inline=False)
     
-    # Staff Section
-    staff_text = f"**Staffs**\n"
-    staff_text += f"▪ Judge: *To be assigned*"
-    embed.add_field(name="👨‍⚖️ Staff", value=staff_text, inline=False)
     
     # Add spacing
     embed.add_field(name="\u200b", value="\u200b", inline=False)
@@ -1774,6 +1855,7 @@ async def event_create(
     loser_score="Loser's score",
     tournament="Tournament name (e.g., The Zumwalt S2)",
     round="Round name (e.g., Semi-Final, Final, Quarter-Final)",
+    group="Group assignment (A-J) - optional",
     remarks="Remarks about the match (e.g., ggwp, close match)",
     ss_1="Screenshot 1 (upload)",
     ss_2="Screenshot 2 (upload)",
@@ -1787,6 +1869,22 @@ async def event_create(
     ss_10="Screenshot 10 (upload)",
     ss_11="Screenshot 11 (upload)"
 )
+@app_commands.choices(
+    group=[
+        app_commands.Choice(name="Group A", value="Group A"),
+        app_commands.Choice(name="Group B", value="Group B"),
+        app_commands.Choice(name="Group C", value="Group C"),
+        app_commands.Choice(name="Group D", value="Group D"),
+        app_commands.Choice(name="Group E", value="Group E"),
+        app_commands.Choice(name="Group F", value="Group F"),
+        app_commands.Choice(name="Group G", value="Group G"),
+        app_commands.Choice(name="Group H", value="Group H"),
+        app_commands.Choice(name="Group I", value="Group I"),
+        app_commands.Choice(name="Group J", value="Group J"),
+        app_commands.Choice(name="Winner", value="Winner"),
+        app_commands.Choice(name="Loser", value="Loser"),
+    ]
+)
 async def event_result(
     interaction: discord.Interaction,
     winner: discord.Member,
@@ -1795,6 +1893,7 @@ async def event_result(
     loser_score: int,
     tournament: str,
     round: str,
+    group: app_commands.Choice[str] = None,
     remarks: str = "ggwp",
     ss_1: discord.Attachment = None,
     ss_2: discord.Attachment = None,
@@ -1822,13 +1921,22 @@ async def event_result(
     if winner_score < 0 or loser_score < 0:
         await interaction.followup.send("❌ Scores cannot be negative", ephemeral=True)
         return
+    
+    # Resolve group label from choice
+    group_label = group.value if group and isinstance(group, app_commands.Choice) else None
             
     # Create results embed matching the exact template format
+    embed_description = f"🗓️ {winner.display_name} Vs {loser.display_name}\n"
+    embed_description += f"**Tournament:** {tournament}\n"
+    embed_description += f"**Round:** {round}"
+    
+    # Add group if specified
+    if group_label:
+        embed_description += f"\n**Group:** {group_label}"
+    
     embed = discord.Embed(
         title="Results",
-        description=f"🗓️ {winner.display_name} Vs {loser.display_name}\n"
-                   f"**Tournament:** {tournament}\n"
-                   f"**Round:** {round}",
+        description=embed_description,
         color=discord.Color.gold(),
         timestamp=discord.utils.utcnow()
     )
@@ -1839,15 +1947,24 @@ async def event_result(
     captains_text += f"▪ Team2 Captain: {loser.mention} `@{loser.name}`"
     embed.add_field(name="", value=captains_text, inline=False)
     
+    # Add spacing
+    embed.add_field(name="\u200b", value="\u200b", inline=False)
+    
     # Results Section
     results_text = f"**Results**\n"
     results_text += f"🏆 {winner.display_name} ({winner_score}) Vs ({loser_score}) {loser.display_name} 💀"
     embed.add_field(name="", value=results_text, inline=False)
     
+    # Add spacing
+    embed.add_field(name="\u200b", value="\u200b", inline=False)
+    
     # Staff Section
     staff_text = f"👨‍⚖️ **Staffs**\n"
     staff_text += f"▪ Judge: {interaction.user.mention} `@{interaction.user.name}`"
     embed.add_field(name="", value=staff_text, inline=False)
+    
+    # Add spacing
+    embed.add_field(name="\u200b", value="\u200b", inline=False)
     
     # Remarks Section
     embed.add_field(name="📝 Remarks", value=remarks, inline=False)
@@ -1940,8 +2057,13 @@ async def event_result(
         if staff_attendance_channel:
             # Create staff attendance message
             attendance_text = f"🏅 {winner.display_name} Vs {loser.display_name}\n"
-            attendance_text += f"**Round :** {round}\n\n"
-            attendance_text += f"**Results**\n"
+            attendance_text += f"**Round :** {round}\n"
+            
+            # Add group if specified
+            if group_label:
+                attendance_text += f"**Group :** {group_label}\n"
+            
+            attendance_text += f"\n**Results**\n"
             attendance_text += f"🏆 {winner.display_name} ({winner_score}) Vs ({loser_score}) {loser.display_name} 💀\n\n"
             attendance_text += f"**Staffs**\n"
             attendance_text += f"• Judge: {interaction.user.mention} `@{interaction.user.name}`"
@@ -1952,20 +2074,37 @@ async def event_result(
     except Exception as e:
         print(f"⚠️ Could not post in Staff Attendance channel: {e}")
 
-    # Schedule auto-cleanup of matching events in this channel after 36 hours
+    # Update matching events with result data and schedule auto-cleanup
     try:
         current_channel_id = interaction.channel.id if interaction.channel else None
         matching_event_ids = []
         for ev_id, data in scheduled_events.items():
             if data.get('channel_id') == current_channel_id:
-                # Optional: further match by captains to be safer
+                # Match by captains to be safer
                 try:
                     t1 = getattr(data.get('team1_captain'), 'id', None)
                     t2 = getattr(data.get('team2_captain'), 'id', None)
                     if winner.id in (t1, t2) and loser.id in (t1, t2):
                         matching_event_ids.append(ev_id)
-                except Exception:
+                        
+                        # Update the event with result data
+                        scheduled_events[ev_id]['result_added'] = True
+                        scheduled_events[ev_id]['result_winner'] = winner
+                        scheduled_events[ev_id]['result_loser'] = loser
+                        scheduled_events[ev_id]['result_winner_score'] = winner_score
+                        scheduled_events[ev_id]['result_loser_score'] = loser_score
+                        scheduled_events[ev_id]['result_judge'] = interaction.user
+                        scheduled_events[ev_id]['result_group'] = group_label
+                        scheduled_events[ev_id]['result_remarks'] = remarks
+                        
+                        print(f"Updated event {ev_id} with result data")
+                except Exception as e:
+                    print(f"Error updating event {ev_id}: {e}")
                     matching_event_ids.append(ev_id)
+        
+        # Save updated events
+        if matching_event_ids:
+            save_scheduled_events()
 
         scheduled_any = False
         for ev_id in matching_event_ids:
@@ -2160,18 +2299,19 @@ async def choose(interaction: discord.Interaction, options: str):
     await interaction.response.send_message(embed=embed)
 
 
-@tree.command(name="unassigned_events", description="List events without a judge assigned (Judges/Organizers)")
+@tree.command(name="unassigned_events", description="List events without a judge assigned (Bot Owner/Judges/Organizers)")
 async def unassigned_events(interaction: discord.Interaction):
     """Show all scheduled events that do not currently have a judge assigned."""
     try:
-        # Allow Organizer, Bot Op, and Judges to view
-        organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"]) if interaction.user else None
-        bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"]) if interaction.user else None
-        judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"]) if interaction.user else None
+        # Allow Bot Owner, Organizer, Bot Op, and Judges to view
+        if interaction.user.id != BOT_OWNER_ID:
+            organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"]) if interaction.user else None
+            bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"]) if interaction.user else None
+            judge_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["judge"]) if interaction.user else None
 
-        if not (organizer_role or bot_op_role or judge_role):
-            await interaction.response.send_message("❌ You need Organizer or Judge role to view unassigned events.", ephemeral=True)
-            return
+            if not (organizer_role or bot_op_role or judge_role):
+                await interaction.response.send_message("❌ You need **Bot Owner**, **Organizer** or **Judge** role to view unassigned events.", ephemeral=True)
+                return
 
         # Build list of unassigned events
         unassigned = []
@@ -2240,15 +2380,16 @@ async def unassigned_events(interaction: discord.Interaction):
         except Exception:
             pass
 
-@tree.command(name="event-delete", description="Delete a scheduled event (Head Organizer/Head Helper/Helper Team only)")
+@tree.command(name="event-delete", description="Delete a scheduled event (Bot Owner/Head Organizer/Head Helper/Helper Team only)")
 async def event_delete(interaction: discord.Interaction):
-    # Check permissions - only Organizer or Bot Op can delete events
-    organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
-    bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
-    
-    if not (organizer_role or bot_op_role):
-        await interaction.response.send_message("❌ You need **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
-        return
+    # Check permissions - Bot Owner, Organizer or Bot Op can delete events
+    if interaction.user.id != BOT_OWNER_ID:
+        organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
+        bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
+        
+        if not (organizer_role or bot_op_role):
+            await interaction.response.send_message("❌ You need **Bot Owner**, **Organizer** or **Bot Op** role to delete events.", ephemeral=True)
+            return
     
     try:
         # Check if there are any scheduled events
@@ -2479,6 +2620,212 @@ async def exchange_judge(
         updated_count += 1
 
     await interaction.response.send_message(f"✅ Judge exchanged for {updated_count} event(s) in {interaction.channel.mention}.", ephemeral=True)
+
+
+@tree.command(name="event-edit", description="Edit the event in this ticket channel (Bot Owner/Head Organizer/Head Helper/Helper Team only)")
+@app_commands.describe(
+    team_1_captain="Captain of team 1 (optional)",
+    team_2_captain="Captain of team 2 (optional)", 
+    hour="Hour of the event (0-23) (optional)",
+    minute="Minute of the event (0-59) (optional)",
+    date="Date of the event (optional)",
+    month="Month of the event (optional)",
+    round="Round label (optional)",
+    tournament="Tournament name (optional)",
+    group="Group assignment (A-J) or Winner/Loser (optional)"
+)
+@app_commands.choices(
+    round=[
+        app_commands.Choice(name="R1", value="R1"),
+        app_commands.Choice(name="R2", value="R2"),
+        app_commands.Choice(name="R3", value="R3"),
+        app_commands.Choice(name="R4", value="R4"),
+        app_commands.Choice(name="R5", value="R5"),
+        app_commands.Choice(name="R6", value="R6"),
+        app_commands.Choice(name="R7", value="R7"),
+        app_commands.Choice(name="R8", value="R8"),
+        app_commands.Choice(name="R9", value="R9"),
+        app_commands.Choice(name="R10", value="R10"),
+        app_commands.Choice(name="Qualifier", value="Qualifier"),
+        app_commands.Choice(name="Semi Final", value="Semi Final"),
+        app_commands.Choice(name="Final", value="Final"),
+    ],
+    group=[
+        app_commands.Choice(name="Group A", value="Group A"),
+        app_commands.Choice(name="Group B", value="Group B"),
+        app_commands.Choice(name="Group C", value="Group C"),
+        app_commands.Choice(name="Group D", value="Group D"),
+        app_commands.Choice(name="Group E", value="Group E"),
+        app_commands.Choice(name="Group F", value="Group F"),
+        app_commands.Choice(name="Group G", value="Group G"),
+        app_commands.Choice(name="Group H", value="Group H"),
+        app_commands.Choice(name="Group I", value="Group I"),
+        app_commands.Choice(name="Group J", value="Group J"),
+        app_commands.Choice(name="Winner", value="Winner"),
+        app_commands.Choice(name="Loser", value="Loser"),
+    ]
+)
+async def event_edit(
+    interaction: discord.Interaction,
+    team_1_captain: discord.Member = None,
+    team_2_captain: discord.Member = None,
+    hour: int = None,
+    minute: int = None,
+    date: int = None,
+    month: int = None,
+    round: app_commands.Choice[str] = None,
+    tournament: str = None,
+    group: app_commands.Choice[str] = None
+):
+    """Edit the event in this ticket channel"""
+    
+    # Defer the response to give us more time for processing
+    await interaction.response.defer(ephemeral=True)
+    
+    # Check permissions - Bot Owner, Head Organizer, Head Helper or Helper Team can edit events
+    if interaction.user.id != BOT_OWNER_ID:
+        if not has_event_create_permission(interaction):
+            await interaction.followup.send("❌ You need **Bot Owner**, **Head Organizer**, **Head Helper** or **Helper Team** role to edit events.", ephemeral=True)
+            return
+    
+    # Find event in current channel
+    current_channel_id = interaction.channel.id
+    event_to_edit = None
+    event_id = None
+    
+    for ev_id, event_data in scheduled_events.items():
+        if event_data.get('channel_id') == current_channel_id:
+            event_to_edit = event_data
+            event_id = ev_id
+            break
+    
+    if not event_to_edit:
+        await interaction.followup.send("❌ No event found in this ticket channel. Use `/event-create` to create an event first.", ephemeral=True)
+        return
+    
+    # Check if at least one field is provided
+    if not any([team_1_captain, team_2_captain, hour is not None, minute is not None, date is not None, month is not None, round, tournament, group]):
+        await interaction.followup.send("❌ Please provide at least one field to update.", ephemeral=True)
+        return
+    
+    # Validate input parameters only if provided
+    if hour is not None and not (0 <= hour <= 23):
+        await interaction.followup.send("❌ Hour must be between 0 and 23", ephemeral=True)
+        return
+    
+    if date is not None and not (1 <= date <= 31):
+        await interaction.followup.send("❌ Date must be between 1 and 31", ephemeral=True)
+        return
+
+    if month is not None and not (1 <= month <= 12):
+        await interaction.followup.send("❌ Month must be between 1 and 12", ephemeral=True)
+        return
+            
+    if minute is not None and not (0 <= minute <= 59):
+        await interaction.followup.send("❌ Minute must be between 0 and 59", ephemeral=True)
+        return
+
+    try:
+        # Get current event data
+        current_datetime = event_to_edit.get('datetime', datetime.datetime.now())
+        current_hour = hour if hour is not None else current_datetime.hour
+        current_minute = minute if minute is not None else current_datetime.minute
+        current_date = date if date is not None else current_datetime.day
+        current_month = month if month is not None else current_datetime.month
+        
+        # Create new datetime
+        current_year = datetime.datetime.now().year
+        new_datetime = datetime.datetime(current_year, current_month, current_date, current_hour, current_minute)
+        
+        # Calculate time differences
+        time_info = calculate_time_difference(new_datetime)
+        
+        # Update only provided fields
+        if team_1_captain:
+            event_to_edit['team1_captain'] = team_1_captain
+        if team_2_captain:
+            event_to_edit['team2_captain'] = team_2_captain
+        if hour is not None or minute is not None or date is not None or month is not None:
+            event_to_edit['datetime'] = new_datetime
+            event_to_edit['time_str'] = time_info['utc_time']
+            event_to_edit['date_str'] = f"{current_date:02d}/{current_month:02d}"
+            event_to_edit['minutes_left'] = time_info['minutes_remaining']
+        if round:
+            round_label = round.value if isinstance(round, app_commands.Choice) else str(round)
+            event_to_edit['round'] = round_label
+        if tournament:
+            event_to_edit['tournament'] = tournament
+        if group:
+            event_to_edit['group'] = group.value
+        
+        # Save updated events
+        save_scheduled_events()
+        
+        # Schedule the 10-minute reminder with updated event data
+        try:
+            await schedule_ten_minute_reminder(event_id, team_1_captain or event_to_edit.get('team1_captain'), team_2_captain or event_to_edit.get('team2_captain'), event_to_edit.get('judge'), interaction.channel, new_datetime)
+        except Exception as e:
+            print(f"Error scheduling reminder for updated event {event_id}: {e}")
+        
+        # Get updated event details for public posting
+        team1_captain = event_to_edit.get('team1_captain')
+        team2_captain = event_to_edit.get('team2_captain')
+        round_info = event_to_edit.get('round', 'Unknown')
+        tournament_info = event_to_edit.get('tournament', 'Unknown')
+        time_info_display = event_to_edit.get('time_str', 'Unknown')
+        date_info_display = event_to_edit.get('date_str', 'Unknown')
+        group_info = event_to_edit.get('group', '')
+        
+        # Create public embed for updated event (similar to event-create)
+        embed = discord.Embed(
+            title="📝 Event Updated",
+            description=f"**Event has been updated by {interaction.user.mention}**",
+            color=discord.Color.orange(),
+            timestamp=discord.utils.utcnow()
+        )
+        
+        # Event Details Section
+        embed.add_field(
+            name="📋 Updated Event Details", 
+            value=f"**Team 1 Captain:** {team1_captain.mention if team1_captain else 'Unknown'} `@{team1_captain.name if team1_captain else 'Unknown'}`\n"
+                  f"**Team 2 Captain:** {team2_captain.mention if team2_captain else 'Unknown'} `@{team2_captain.name if team2_captain else 'Unknown'}`\n"
+                  f"**UTC Time:** {time_info_display}\n"
+                  f"**Local Time:** <t:{int(new_datetime.timestamp())}:F> (<t:{int(new_datetime.timestamp())}:R>)\n"
+                  f"**Round:** {round_info}\n"
+                  f"**Tournament:** {tournament_info}\n"
+                  f"**Channel:** {interaction.channel.mention}",
+            inline=False
+        )
+        
+        if group_info:
+            embed.add_field(
+                name="🏆 Group Assignment",
+                value=f"**Group:** {group_info}",
+                inline=False
+            )
+        
+        # Add spacing
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
+        
+        # Captains Section
+        captains_text = f"**Captains**\n"
+        captains_text += f"▪ Team1 Captain: {team1_captain.mention if team1_captain else 'Unknown'} `@{team1_captain.name if team1_captain else 'Unknown'}`\n"
+        captains_text += f"▪ Team2 Captain: {team2_captain.mention if team2_captain else 'Unknown'} `@{team2_captain.name if team2_captain else 'Unknown'}`"
+        embed.add_field(name="", value=captains_text, inline=False)
+        
+        embed.set_footer(text=f"Event Updated • {ORGANIZATION_NAME}")
+        
+        # Post the updated event embed to the channel
+        try:
+            await interaction.channel.send(embed=embed)
+        except Exception as e:
+            await interaction.followup.send(f"⚠️ Could not post in current channel: {e}", ephemeral=True)
+        
+        # Send confirmation to user
+        await interaction.followup.send("✅ Event updated successfully!", ephemeral=True)
+        
+    except Exception as e:
+        await interaction.followup.send(f"❌ Error updating event: {str(e)}", ephemeral=True)
 
 
 # Ticket Management Commands - Removed as requested

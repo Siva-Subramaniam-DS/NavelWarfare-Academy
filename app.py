@@ -460,7 +460,7 @@ class TakeScheduleButton(View):
                 inline=True
             )
             
-            embed.set_footer(text=f"Judge Assignment • {ORGANIZATION_NAME}")
+            embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
             
             # Send notification to the event channel
             await self.event_channel.send(
@@ -1206,6 +1206,70 @@ async def on_ready():
     
     print("🎯 Bot is ready to receive commands!")
 
+@bot.event
+async def on_message(message):
+    """Handle auto-response commands for ticket management"""
+    # Ignore messages from the bot itself
+    if message.author == bot.user:
+        return
+    
+    # Only process messages that start with ? and are in specific channels
+    if not message.content.startswith('?'):
+        return
+    
+    # Check if the command should be restricted to specific channels
+    # For now, allow in all channels, but you can add restrictions here
+    # Example: if message.channel.id not in [CHANNEL_IDS["take_schedule"], ...]:
+    #     return
+    
+    # Extract command from message
+    command = message.content.lower().strip()
+    
+    # Handle ticket status commands (?sh, ?dq, ?dd) - modify channel name prefix
+    if command in ['?sh', '?dq', '?dd']:
+        try:
+            # Get the current channel
+            channel = message.channel
+            
+            # Determine the new prefix based on command
+            if command == '?sh':
+                new_prefix = "🟢"
+            elif command == '?dq':
+                new_prefix = "🔴"
+            elif command == '?dd':
+                new_prefix = "✅"
+            
+            # Get current channel name
+            current_name = channel.name
+            
+            # Remove existing status prefixes if they exist
+            clean_name = current_name
+            status_prefixes = ["🟢", "🔴", "✅"]
+            for prefix in status_prefixes:
+                if clean_name.startswith(prefix):
+                    clean_name = clean_name[len(prefix):].lstrip("-").lstrip()
+                    break
+            
+            # Create new channel name with the status prefix
+            new_name = f"{new_prefix}-{clean_name}"
+            
+            # Update channel name
+            await channel.edit(name=new_name)
+            
+        except discord.Forbidden:
+            await message.channel.send("❌ I don't have permission to edit this channel's name.")
+        except discord.HTTPException as e:
+            await message.channel.send(f"❌ Error updating channel name: {e}")
+        except Exception as e:
+            await message.channel.send(f"❌ Unexpected error: {e}")
+        
+    elif command == '?b':
+        # Challonge URL response
+        await message.channel.send("https://challonge.com/nwaanniversary")
+    
+    # Process other bot commands (important for command processing)
+    await bot.process_commands(message)
+
 # ===========================================================================================
 # ENHANCED HELP COMMAND SYSTEM
 # ===========================================================================================
@@ -1601,9 +1665,7 @@ async def event(interaction: discord.Interaction, action: app_commands.Choice[st
     month="Month of the event",
     round="Round label",
     tournament="Tournament name (e.g. King of the Seas, Summer Cup, etc.)",
-    group="Group assignment (A-J) or Winner/Loser",
-    winner="Winner of the match (optional)",
-    loser="Loser of the match (optional)"
+    group="Group assignment (A-J) or Winner/Loser"
 )
 @app_commands.choices(
     round=[
@@ -1646,9 +1708,7 @@ async def event_create(
     month: int,
     round: app_commands.Choice[str],
     tournament: str,
-    group: app_commands.Choice[str] = None,
-    winner: discord.Member = None,
-    loser: discord.Member = None
+    group: app_commands.Choice[str] = None
 ):
     """Creates an event with the specified parameters"""
     
@@ -1804,7 +1864,7 @@ async def event_create(
         except Exception as e:
             print(f"Error loading poster image: {e}")
     
-    embed.set_footer(text=f"Event Management • {ORGANIZATION_NAME}")
+    embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
     
     # Create Take Schedule button
     take_schedule_view = TakeScheduleButton(event_id, team_1_captain, team_2_captain, interaction.channel)
@@ -1994,7 +2054,7 @@ async def event_result(
         screenshot_text += f"📷 {' • '.join(screenshot_names)}"
         embed.add_field(name="", value=screenshot_text, inline=False)
     
-    embed.set_footer(text=f"Event Results • {ORGANIZATION_NAME}")
+    embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
     
     # Send confirmation to user
     await interaction.followup.send("✅ Event results posted to Results channel, current channel, and Staff Attendance logged!", ephemeral=True)
@@ -2201,7 +2261,7 @@ async def time(interaction: discord.Interaction):
         inline=False
     )
                     
-    embed.set_footer(text=f"Match Time Generator • {ORGANIZATION_NAME}")
+    embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
     
     await interaction.response.send_message(embed=embed)
 
@@ -2256,7 +2316,7 @@ async def choose(interaction: discord.Interaction, options: str):
                 inline=False
             )
             
-            embed.set_footer(text=f"Random Map Selection • {ORGANIZATION_NAME}")
+            embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
             await interaction.response.send_message(embed=embed)
             return
         else:
@@ -2294,7 +2354,7 @@ async def choose(interaction: discord.Interaction, options: str):
         inline=False
     )
     
-    embed.set_footer(text=f"Random Choice Generator • {ORGANIZATION_NAME}")
+    embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
     
     await interaction.response.send_message(embed=embed)
 
@@ -2491,7 +2551,7 @@ async def event_delete(interaction: discord.Interaction):
                     inline=False
                 )
                 
-                embed.set_footer(text=f"Event Management • {ORGANIZATION_NAME}")
+                embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
                 
                 await select_interaction.response.edit_message(embed=embed, view=None)
         
@@ -2509,7 +2569,7 @@ async def event_delete(interaction: discord.Interaction):
             inline=False
         )
         
-        embed.set_footer(text=f"Event Management • {ORGANIZATION_NAME}")
+        embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
         
         view = EventDeleteView()
         await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
@@ -2763,7 +2823,8 @@ async def event_edit(
         
         # Schedule the 10-minute reminder with updated event data
         try:
-            await schedule_ten_minute_reminder(event_id, team_1_captain or event_to_edit.get('team1_captain'), team_2_captain or event_to_edit.get('team2_captain'), event_to_edit.get('judge'), interaction.channel, new_datetime)
+            # Use the updated captains from the event data (which now contains the new values)
+            await schedule_ten_minute_reminder(event_id, event_to_edit.get('team1_captain'), event_to_edit.get('team2_captain'), event_to_edit.get('judge'), interaction.channel, new_datetime)
         except Exception as e:
             print(f"Error scheduling reminder for updated event {event_id}: {e}")
         
@@ -2788,14 +2849,17 @@ async def event_edit(
         embed.add_field(
             name="📋 Updated Event Details", 
             value=f"**Team 1 Captain:** {team1_captain.mention if team1_captain else 'Unknown'} `@{team1_captain.name if team1_captain else 'Unknown'}`\n"
-                  f"**Team 2 Captain:** {team2_captain.mention if team2_captain else 'Unknown'} `@{team2_captain.name if team2_captain else 'Unknown'}`\n"
+                  f"**Team 2 Captain:** {team2_captain.mention if team2_captain else 'Unknown'} `@{team2_captain.name if team2_captain else 'Unknown'}`\n\n"
                   f"**UTC Time:** {time_info_display}\n"
-                  f"**Local Time:** <t:{int(new_datetime.timestamp())}:F> (<t:{int(new_datetime.timestamp())}:R>)\n"
+                  f"**Local Time:** <t:{int(new_datetime.timestamp())}:F> (<t:{int(new_datetime.timestamp())}:R>)\n\n"
                   f"**Round:** {round_info}\n"
-                  f"**Tournament:** {tournament_info}\n"
+                  f"**Tournament:** {tournament_info}\n\n"
                   f"**Channel:** {interaction.channel.mention}",
             inline=False
         )
+        
+        # Add spacing
+        embed.add_field(name="\u200b", value="\u200b", inline=False)
         
         if group_info:
             embed.add_field(
@@ -2804,16 +2868,13 @@ async def event_edit(
                 inline=False
             )
         
-        # Add spacing
-        embed.add_field(name="\u200b", value="\u200b", inline=False)
-        
         # Captains Section
         captains_text = f"**Captains**\n"
         captains_text += f"▪ Team1 Captain: {team1_captain.mention if team1_captain else 'Unknown'} `@{team1_captain.name if team1_captain else 'Unknown'}`\n"
         captains_text += f"▪ Team2 Captain: {team2_captain.mention if team2_captain else 'Unknown'} `@{team2_captain.name if team2_captain else 'Unknown'}`"
         embed.add_field(name="", value=captains_text, inline=False)
         
-        embed.set_footer(text=f"Event Updated • {ORGANIZATION_NAME}")
+        embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
         
         # Post the updated event embed to the channel
         try:
@@ -2829,6 +2890,126 @@ async def event_edit(
 
 
 # Ticket Management Commands - Removed as requested
+
+@tree.command(name="general_tie_breaker", description="To break a tie between two teams using the highest total score")
+@app_commands.describe(
+    tm1_name="Name of the first team. By default, it is Alpha",
+    tm1_pl1_score="Score of the first player of the first team",
+    tm1_pl2_score="Score of the second player of the first team", 
+    tm1_pl3_score="Score of the third player of the first team",
+    tm1_pl4_score="Score of the fourth player of the first team",
+    tm1_pl5_score="Score of the fifth player of the first team",
+    tm2_name="Name of the second team. By default, it is Bravo",
+    tm2_pl1_score="Score of the first player of the second team",
+    tm2_pl2_score="Score of the second player of the second team",
+    tm2_pl3_score="Score of the third player of the second team",
+    tm2_pl4_score="Score of the fourth player of the second team",
+    tm2_pl5_score="Score of the fifth player of the second team"
+)
+async def general_tie_breaker(
+    interaction: discord.Interaction,
+    tm1_pl1_score: int,
+    tm1_pl2_score: int,
+    tm1_pl3_score: int,
+    tm1_pl4_score: int,
+    tm1_pl5_score: int,
+    tm2_pl1_score: int,
+    tm2_pl2_score: int,
+    tm2_pl3_score: int,
+    tm2_pl4_score: int,
+    tm2_pl5_score: int,
+    tm1_name: str = "Alpha",
+    tm2_name: str = "Bravo"
+):
+    """Break a tie between two teams using the highest total score"""
+    
+    # Check permissions - only organizers and helpers can use this command
+    if not has_event_create_permission(interaction):
+        await interaction.response.send_message("❌ You need **Organizers** or **Helpers Tournament** role to use tie breaker.", ephemeral=True)
+        return
+    
+    # Calculate team totals
+    tm1_total = tm1_pl1_score + tm1_pl2_score + tm1_pl3_score + tm1_pl4_score + tm1_pl5_score
+    tm2_total = tm2_pl1_score + tm2_pl2_score + tm2_pl3_score + tm2_pl4_score + tm2_pl5_score
+    
+    # Determine winner
+    if tm1_total > tm2_total:
+        winner = tm1_name
+        winner_total = tm1_total
+        loser = tm2_name
+        loser_total = tm2_total
+        color = discord.Color.green()
+    elif tm2_total > tm1_total:
+        winner = tm2_name
+        winner_total = tm2_total
+        loser = tm1_name
+        loser_total = tm1_total
+        color = discord.Color.green()
+    else:
+        # Still tied
+        winner = "TIE"
+        winner_total = tm1_total
+        loser = ""
+        loser_total = tm2_total
+        color = discord.Color.orange()
+    
+    # Create result embed
+    embed = discord.Embed(
+        title="🏆 Tie Breaker Results",
+        description="Results based on highest total team score",
+        color=color,
+        timestamp=discord.utils.utcnow()
+    )
+    
+    # Team 1 scores
+    embed.add_field(
+        name=f"🔵 {tm1_name} Team",
+        value=f"Player 1: `{tm1_pl1_score}`\n"
+              f"Player 2: `{tm1_pl2_score}`\n"
+              f"Player 3: `{tm1_pl3_score}`\n"
+              f"Player 4: `{tm1_pl4_score}`\n"
+              f"Player 5: `{tm1_pl5_score}`\n"
+              f"**Total: {tm1_total}**",
+        inline=True
+    )
+    
+    # Team 2 scores
+    embed.add_field(
+        name=f"🔴 {tm2_name} Team",
+        value=f"Player 1: `{tm2_pl1_score}`\n"
+              f"Player 2: `{tm2_pl2_score}`\n"
+              f"Player 3: `{tm2_pl3_score}`\n"
+              f"Player 4: `{tm2_pl4_score}`\n"
+              f"Player 5: `{tm2_pl5_score}`\n"
+              f"**Total: {tm2_total}**",
+        inline=True
+    )
+    
+    # Add spacing
+    embed.add_field(name="\u200b", value="\u200b", inline=False)
+    
+    # Result
+    if winner == "TIE":
+        embed.add_field(
+            name="🤝 Final Result",
+            value=f"**STILL TIED!**\n"
+                  f"Both teams scored {tm1_total} points\n"
+                  f"Additional tie-breaking method needed",
+            inline=False
+        )
+    else:
+        embed.add_field(
+            name="🏆 Winner",
+            value=f"**{winner}** wins the tie breaker!\n"
+                  f"**{winner}**: {winner_total} points\n"
+                  f"**{loser}**: {loser_total} points\n"
+                  f"Difference: {abs(winner_total - loser_total)} points",
+            inline=False
+        )
+    
+    embed.set_footer(text=f"Tie Breaker • Calculated by {interaction.user.display_name}")
+    
+    await interaction.response.send_message(embed=embed)
 
 
 if __name__ == "__main__":

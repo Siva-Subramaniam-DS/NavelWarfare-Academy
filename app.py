@@ -1766,9 +1766,7 @@ async def event_create(
         'judge': None,
         'channel_id': interaction.channel.id,
         'team1_captain': team_1_captain,
-        'team2_captain': team_2_captain,
-        'winner': winner,
-        'loser': loser
+        'team2_captain': team_2_captain
     }
     
     # Save events to file

@@ -1329,8 +1329,8 @@ COMMAND_DATA = {
         "commands": [
             {
                 "name": "/event-create",
-                "description": "Create new tournament events with Group support, Winner/Loser options, and automatic scheduling",
-                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> hour:<0-23> minute:<0-59> date:<1-31> month:<1-12> round:<round> tournament:<name> [group:<A-J/Winner/Loser>] [winner:<@user>] [loser:<@user>]",
+                "description": "Create new tournament events with Group support and automatic scheduling",
+                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> hour:<0-23> minute:<0-59> date:<1-31> month:<1-12> round:<round> tournament:<name> [group:<A-J/Winner/Loser>]",
                 "permissions": "owner / organizer / bot_op",
                 "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 hour:15 minute:30 date:25 month:12 round:R1 tournament:Summer Cup group:Group A`",
                 "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
@@ -1836,16 +1836,6 @@ async def event_create(
     captains_text += f"▪ Team1 Captain: {team_1_captain.mention} @{team_1_captain.name}\n"
     captains_text += f"▪ Team2 Captain: {team_2_captain.mention} @{team_2_captain.name}"
     embed.add_field(name="👑 Team Captains", value=captains_text, inline=False)
-    
-    # Add Winner/Loser section if provided
-    if winner or loser:
-        embed.add_field(name="\u200b", value="\u200b", inline=False)
-        result_text = f"**Match Result**\n"
-        if winner:
-            result_text += f"🏆 Winner: {winner.mention} @{winner.name}\n"
-        if loser:
-            result_text += f"💀 Loser: {loser.mention} @{loser.name}"
-        embed.add_field(name="🏆 Match Result", value=result_text, inline=False)
     
     
     # Add spacing

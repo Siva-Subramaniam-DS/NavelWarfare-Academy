@@ -698,8 +698,8 @@ async def schedule_event_reminder_v2(event_id: str, team1_captain: discord.Membe
     except Exception as e:
         print(f"Error in schedule_event_reminder_v2 for event {event_id}: {e}")
 
-async def schedule_event_cleanup(event_id: str, delay_hours: int = 36):
-    """Schedule cleanup to remove an event after delay_hours (default 36h)."""
+async def schedule_event_cleanup(event_id: str, delay_hours: int = 24):
+    """Schedule cleanup to remove an event after delay_hours (default 24h)."""
     try:
         if event_id not in scheduled_events:
             return
@@ -1319,7 +1319,14 @@ COMMAND_DATA = {
                 "description": "Make a random choice from comma-separated options",
                 "usage": "/choose options:<option1,option2,option3>",
                 "permissions": "everyone",
-                "example": "Example: `/choose options:Map1,Map2,Map3` to randomly select a map"
+                "example": "Example: `/choose options:Option1,Option2,Option3` to randomly select one option"
+            },
+            {
+                "name": "/maps",
+                "description": "Randomly select 3, 5, or 7 maps for gameplay",
+                "usage": "/maps count:<3|5|7>",
+                "permissions": "everyone",
+                "example": "Example: `/maps count:5` to randomly select 5 maps"
             }
         ]
     },
@@ -2216,7 +2223,7 @@ async def event_result(
             print(f"Error updating current channel schedule title: {e}")
 
         if scheduled_any:
-            await interaction.followup.send("🧹 Auto-cleanup scheduled: Related event(s) will be removed after 36 hours.", ephemeral=True)
+            await interaction.followup.send("🧹 Auto-cleanup scheduled: Related event(s) will be removed after 24 hours.", ephemeral=True)
     except Exception as e:
         print(f"Error scheduling auto-cleanup after results: {e}")
 
@@ -2255,17 +2262,17 @@ async def time(interaction: discord.Interaction):
 
 ## Removed test-poster command per request
 
-@tree.command(name="choose", description="Randomly choose from a list of options or maps")
+@tree.command(name="maps", description="Randomly select 3, 5, or 7 maps for gameplay")
 @app_commands.describe(
-    options="List of options separated by commas, or a number (1-20) for maps"
+    count="Number of maps to select (3, 5, or 7)"
 )
-async def choose(interaction: discord.Interaction, options: str):
-    """Randomly selects one option from a comma-separated list or predefined maps"""
+async def maps(interaction: discord.Interaction, count: int):
+    """Randomly selects 3, 5, or 7 maps from the available map pool"""
     
     import random
     
     # Predefined map list
-    maps = [
+    maps_list = [
         "New Storm (2024)",
         "Arid Frontier", 
         "Islands of Iceland",
@@ -2282,41 +2289,48 @@ async def choose(interaction: discord.Interaction, options: str):
         "Old Storm"
     ]
     
-    # Check if input is a number (for map selection)
-    if options.strip().isdigit():
-        number = int(options.strip())
-        if 1 <= number <= len(maps):
-            # Randomly select 'number' of maps
-            selected_maps = random.sample(maps, number)
-            
-            embed = discord.Embed(
-                title=f"🗺️ Random Map Selection {ORGANIZATION_NAME}",
-                description=f"**Randomly selected {number} map(s):**",
-                color=discord.Color.green(),
-                timestamp=discord.utils.utcnow()
-            )
-            
-            # Add selected maps as a field
-            selected_maps_text = "\n".join([f"• {map_name}" for map_name in selected_maps])
-            embed.add_field(
-                name=f"🎯 Selected Maps ({number})",
-                value=selected_maps_text,
-                inline=False
-            )
-            
-            embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
-            await interaction.response.send_message(embed=embed)
-            return
-        else:
-            await interaction.response.send_message(f"❌ Please enter a number between 1 and {len(maps)} for map selection.", ephemeral=True)
-            return
+    # Validate count
+    if count not in [3, 5, 7]:
+        await interaction.response.send_message("❌ Please select 3, 5, or 7 maps only.", ephemeral=True)
+        return
+    
+    # Randomly select the specified number of maps
+    selected_maps = random.sample(maps_list, count)
+    
+    embed = discord.Embed(
+        title=f"🗺️ Random Map Selection {ORGANIZATION_NAME}",
+        description=f"**Randomly selected {count} map(s):**",
+        color=discord.Color.green(),
+        timestamp=discord.utils.utcnow()
+    )
+    
+    # Add selected maps as a field
+    selected_maps_text = "\n".join([f"• {map_name}" for map_name in selected_maps])
+    embed.add_field(
+        name=f"🎯 Selected Maps ({count})",
+        value=selected_maps_text,
+        inline=False
+    )
+    
+    embed.set_footer(text=f"Powered by • {ORGANIZATION_NAME}")
+    await interaction.response.send_message(embed=embed)
+
+
+@tree.command(name="choose", description="Randomly choose from a list of options")
+@app_commands.describe(
+    options="List of options separated by commas"
+)
+async def choose(interaction: discord.Interaction, options: str):
+    """Randomly selects one option from a comma-separated list"""
+    
+    import random
     
     # Handle comma-separated options (original functionality)
     option_list = [option.strip() for option in options.split(',') if option.strip()]
     
     # Validate input
     if len(option_list) < 2:
-        await interaction.response.send_message("❌ Please provide at least 2 options separated by commas, or enter a number (1-14) for maps.", ephemeral=True)
+        await interaction.response.send_message("❌ Please provide at least 2 options separated by commas.", ephemeral=True)
         return
     
     if len(option_list) > 20:

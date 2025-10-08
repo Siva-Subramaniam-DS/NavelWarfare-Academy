@@ -36,7 +36,7 @@ BOT_OWNER_ID = 1251442077561131059
 # Role IDs for permissions
 ROLE_IDS = {
     "judge": 1261723119257915412,        # Judge role
-    "bot_op": 1242280627991220275,       # Bot operator role (like helper head and helper team)
+    "bot_op": 1242280627991220275,       # Bot operator role
     "organizer": 1314905337437880340,    # Organizer role
     "bot_admin": 1242280443898761236     # Bot admin role (full server permissions)
 }
@@ -1455,6 +1455,22 @@ async def add_captain(interaction: discord.Interaction, round: str, captain1: di
             await interaction.response.send_message(f"❌ Failed to rename channel: {e}", ephemeral=True)
             return
         
+        # Add both captains to the channel
+        try:
+            # Add captain 1 to the channel
+            await channel.set_permissions(captain1, 
+                                         view_channel=True,
+                                         send_messages=True)
+            
+            # Add captain 2 to the channel
+            await channel.set_permissions(captain2, 
+                                         view_channel=True,
+                                         send_messages=True)
+        except discord.Forbidden:
+            await interaction.followup.send("⚠️ Channel renamed but couldn't add captains - missing permissions.", ephemeral=True)
+        except discord.HTTPException as e:
+            await interaction.followup.send(f"⚠️ Channel renamed but error adding captains: {e}", ephemeral=True)
+        
         # Send tournament rules message
         rules_embed = discord.Embed(
             title="🏆 Tournament Match Setup",
@@ -1491,7 +1507,7 @@ async def add_captain(interaction: discord.Interaction, round: str, captain1: di
         
         rules_embed.add_field(
             name="🆘 Need Help?",
-            value="If you require any assistance, please ping <@&1424280282571341945> and they will be happy to assist.",
+            value="If you require any assistance, please ping <@&1242280627991220275> and they will be happy to assist.",
             inline=False
         )
         
@@ -1597,7 +1613,7 @@ async def event_create(
     
     # Check permissions
     if not has_event_create_permission(interaction):
-        await interaction.followup.send("❌ You need **Head Organizer**, **Head Helper** or **Helper Team** role to create events.", ephemeral=True)
+        await interaction.followup.send("❌ You need **Bot Admin**, **Organizer**, or **Bot Op** role to create events.", ephemeral=True)
         return
     
     # Validate input parameters
@@ -1775,7 +1791,7 @@ async def event_create(
     except Exception as e:
         await interaction.followup.send(f"⚠️ Could not post in current channel: {e}", ephemeral=True)
 
-@tree.command(name="event-result", description="Add event results (Head Organizer/Judge only)")
+@tree.command(name="event-result", description="Add event results (Organizer/Judge only)")
 @app_commands.describe(
     winner="Winner of the event",
     winner_score="Winner's score",
@@ -1842,7 +1858,7 @@ async def event_result(
     
     # Check permissions
     if not has_event_result_permission(interaction):
-        await interaction.followup.send("❌ You need **Head Organizer** or **Judge** role to post event results.", ephemeral=True)
+        await interaction.followup.send("❌ You need **Organizer** or **Judge** role to post event results.", ephemeral=True)
         return
 
     # Validate scores
@@ -2463,9 +2479,9 @@ async def exchange_judge(
     old_judge: discord.Member,
     new_judge: discord.Member
 ):
-    # Only Head Helper or Helper Team can exchange judges
+    # Only Bot Admin, Organizer or Bot Op can exchange judges
     if not has_event_create_permission(interaction):
-        await interaction.response.send_message("❌ You need Head Organizer, Head Helper or Helper Team role to exchange judges.", ephemeral=True)
+        await interaction.response.send_message("❌ You need Bot Admin, Organizer, or Bot Op role to exchange judges.", ephemeral=True)
         return
 
     # Validate roles of old/new judges
@@ -2617,10 +2633,10 @@ async def event_edit(
     # Defer the response to give us more time for processing
     await interaction.response.defer(ephemeral=True)
     
-    # Check permissions - Bot Owner, Head Organizer, Head Helper or Helper Team can edit events
+    # Check permissions - Bot Admin, Organizer or Bot Op can edit events
     if interaction.user.id != BOT_OWNER_ID:
         if not has_event_create_permission(interaction):
-            await interaction.followup.send("❌ You need **Bot Owner**, **Head Organizer**, **Head Helper** or **Helper Team** role to edit events.", ephemeral=True)
+            await interaction.followup.send("❌ You need **Bot Admin**, **Organizer**, or **Bot Op** role to edit events.", ephemeral=True)
             return
     
     # Find event in current channel
@@ -2798,9 +2814,9 @@ async def general_tie_breaker(
 ):
     """Break a tie between two teams using the highest total score"""
     
-    # Check permissions - only organizers and helpers can use this command
+    # Check permissions - only Bot Admin, Organizer or Bot Op can use this command
     if not has_event_create_permission(interaction):
-        await interaction.response.send_message("❌ You need **Organizers** or **Helpers Tournament** role to use tie breaker.", ephemeral=True)
+        await interaction.response.send_message("❌ You need **Bot Admin**, **Organizer**, or **Bot Op** role to use tie breaker.", ephemeral=True)
         return
     
     # Calculate team totals

@@ -1225,8 +1225,8 @@ async def on_message(message):
     # Extract command from message
     command = message.content.lower().strip()
     
-    # Handle ticket status commands (?sh, ?dq, ?dd) - modify channel name prefix
-    if command in ['?sh', '?dq', '?dd']:
+    # Handle ticket status commands (?sh, ?dq, ?dd, ?ho) - modify channel name prefix
+    if command in ['?sh', '?dq', '?dd', '?ho']:
         try:
             # Get the current channel
             channel = message.channel
@@ -1238,13 +1238,15 @@ async def on_message(message):
                 new_prefix = "🔴"
             elif command == '?dd':
                 new_prefix = "✅"
+            elif command == '?ho':
+                new_prefix = "🟡"
             
             # Get current channel name
             current_name = channel.name
             
             # Remove existing status prefixes if they exist
             clean_name = current_name
-            status_prefixes = ["🟢", "🔴", "✅"]
+            status_prefixes = ["🟢", "🔴", "✅", "🟡"]
             for prefix in status_prefixes:
                 if clean_name.startswith(prefix):
                     clean_name = clean_name[len(prefix):].lstrip("-").lstrip()
@@ -1256,312 +1258,46 @@ async def on_message(message):
             # Update channel name
             await channel.edit(name=new_name)
             
+            # Delete the original command message after successful execution
+            try:
+                await message.delete()
+            except discord.Forbidden:
+                pass  # Ignore if we can't delete the message
+            except Exception:
+                pass  # Ignore any other deletion errors
+            
         except discord.Forbidden:
-            await message.channel.send("❌ I don't have permission to edit this channel's name.")
+            response = await message.channel.send("❌ I don't have permission to edit this channel's name.")
+            try:
+                await message.delete()
+            except:
+                pass
         except discord.HTTPException as e:
-            await message.channel.send(f"❌ Error updating channel name: {e}")
+            response = await message.channel.send(f"❌ Error updating channel name: {e}")
+            try:
+                await message.delete()
+            except:
+                pass
         except Exception as e:
-            await message.channel.send(f"❌ Unexpected error: {e}")
+            response = await message.channel.send(f"❌ Unexpected error: {e}")
+            try:
+                await message.delete()
+            except:
+                pass
         
     elif command == '?b':
         # Challonge URL response
-        await message.channel.send("https://challonge.com/nwaanniversary")
+        response = await message.channel.send("https://challonge.com/nwaanniversary")
+        # Delete the original command message
+        try:
+            await message.delete()
+        except discord.Forbidden:
+            pass  # Ignore if we can't delete the message
+        except Exception:
+            pass  # Ignore any other deletion errors
     
     # Process other bot commands (important for command processing)
     await bot.process_commands(message)
-
-# ===========================================================================================
-# ENHANCED HELP COMMAND SYSTEM
-# ===========================================================================================
-
-# Command data structure with detailed information
-COMMAND_DATA = {
-    "system": {
-        "title": "⚙️ System Commands",
-        "description": "Basic bot functionality available to all users",
-        "commands": [
-            {
-                "name": "/help",
-                "description": "Display this comprehensive command guide with role-based filtering",
-                "usage": "/help",
-                "permissions": "everyone",
-                "example": "Simply type `/help` to see available commands"
-            },
-            {
-                "name": "/rules",
-                "description": "View tournament rules (or manage them if you're an organizer)",
-                "usage": "/rules",
-                "permissions": "everyone (view) / organizer (manage)",
-                "example": "Use `/rules` to view current tournament rules"
-            }
-        ]
-    },
-    "utility": {
-        "title": "🛠️ Utility Commands",
-        "description": "Helpful tools for tournament management",
-        "commands": [
-            {
-                "name": "/team_balance",
-                "description": "Balance two teams based on player skill levels",
-                "usage": "/team_balance levels:<comma-separated levels>",
-                "permissions": "everyone",
-                "example": "Example: `/team_balance levels:48,50,51,35,51,50,50,37,51,52`"
-            },
-            {
-                "name": "/time",
-                "description": "Generate a random match time between 12:00-17:59 UTC",
-                "usage": "/time",
-                "permissions": "everyone",
-                "example": "Use `/time` to get a random tournament match time"
-            },
-            {
-                "name": "/choose",
-                "description": "Make a random choice from comma-separated options",
-                "usage": "/choose options:<option1,option2,option3>",
-                "permissions": "everyone",
-                "example": "Example: `/choose options:Option1,Option2,Option3` to randomly select one option"
-            },
-            {
-                "name": "/maps",
-                "description": "Randomly select 3, 5, or 7 maps for gameplay",
-                "usage": "/maps count:<3|5|7>",
-                "permissions": "everyone",
-                "example": "Example: `/maps count:5` to randomly select 5 maps"
-            }
-        ]
-    },
-    "event_management": {
-        "title": "🏆 Event Management",
-        "description": "Tournament event creation and management (requires special permissions)",
-        "commands": [
-            {
-                "name": "/event-create",
-                "description": "Create new tournament events with Group support and automatic scheduling",
-                "usage": "/event-create team_1_captain:<@user> team_2_captain:<@user> hour:<0-23> minute:<0-59> date:<1-31> month:<1-12> round:<round> tournament:<name> [group:<A-J/Winner/Loser>]",
-                "permissions": "owner / organizer / bot_op",
-                "example": "Example: `/event-create team_1_captain:@Captain1 team_2_captain:@Captain2 hour:15 minute:30 date:25 month:12 round:R1 tournament:Summer Cup group:Group A`",
-                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
-                "group_options": "Group A, Group B, Group C, Group D, Group E, Group F, Group G, Group H, Group I, Group J, Winner, Loser"
-            },
-            {
-                "name": "/event-edit",
-                "description": "Edit existing events to correct mistakes without deleting and recreating",
-                "usage": "/event-edit",
-                "permissions": "owner / organizer / bot_op",
-                "example": "Use `/event-edit` to select and modify any scheduled event with pre-filled current values"
-            },
-            {
-                "name": "/event-result",
-                "description": "Record match results with Group support and comprehensive tournament tracking",
-                "usage": "/event-result winner:<@user> winner_score:<score> loser:<@user> loser_score:<score> tournament:<name> round:<round> [group:<A-J/Winner/Loser>] [remarks:<text>] [screenshots:<1-11>]",
-                "permissions": "organizer / judge",
-                "example": "Use `/event-result` to record match outcomes with group information and screenshot evidence",
-                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
-                "group_options": "Group A, Group B, Group C, Group D, Group E, Group F, Group G, Group H, Group I, Group J, Winner, Loser"
-            },
-            {
-                "name": "/event-delete",
-                "description": "Delete scheduled events (use with caution)",
-                "usage": "/event-delete",
-                "permissions": "owner / organizer / bot_op",
-                "example": "Use `/event-delete` and select from scheduled events to remove"
-            },
-            {
-                "name": "/unassigned_events",
-                "description": "List all events without a judge assigned for easy management",
-                "usage": "/unassigned_events",
-                "permissions": "owner / organizer / judge",
-                "example": "Use `/unassigned_events` to see which matches still need judges"
-            },
-            {
-                "name": "/exchange_judge",
-                "description": "Exchange an old judge for a new judge for events in current channel",
-                "usage": "/exchange_judge old_judge:<@user> new_judge:<@user>",
-                "permissions": "owner / organizer / bot_op",
-                "example": "Use `/exchange_judge` to reassign judges for events in the current channel"
-            }
-        ]
-    },
-    "judge": {
-        "title": "👨‍⚖️ Judge Commands",
-        "description": "Special commands for tournament judges",
-        "commands": [
-            {
-                "name": "Take Schedule Button",
-                "description": "Click the 'Take Schedule' button on event posts to assign yourself as judge",
-                "usage": "Click button on event announcements",
-                "permissions": "judge / organizer",
-                "example": "Look for green 'Take Schedule' buttons in the schedule channel"
-            },
-            {
-                "name": "/event-result",
-                "description": "Record official match results with Group support and comprehensive tracking",
-                "usage": "/event-result winner:<@user> winner_score:<score> loser:<@user> loser_score:<score> tournament:<name> round:<round> [group:<A-J/Winner/Loser>] [remarks:<text>] [screenshots:<1-11>]",
-                "permissions": "judge / organizer",
-                "example": "Use after completing a match you judged to record the official result with group information and evidence",
-                "round_options": "R1, R2, R3, R4, R5, R6, R7, R8, R9, R10, Qualifier, Semi Final, Final",
-                "group_options": "Group A, Group B, Group C, Group D, Group E, Group F, Group G, Group H, Group I, Group J, Winner, Loser"
-            },
-            {
-                "name": "/unassigned_events",
-                "description": "View events without assigned judges to help with scheduling",
-                "usage": "/unassigned_events",
-                "permissions": "judge / organizer",
-                "example": "Use `/unassigned_events` to see which matches need judges"
-            }
-        ]
-    }
-}
-
-def get_user_permission_level(user_roles) -> str:
-    """Determine user's permission level based on their Discord roles"""
-    try:
-        role_ids = [role.id for role in user_roles]
-        
-        if ROLE_IDS["owner"] in role_ids:
-            return "owner"
-        elif ROLE_IDS["organizer"] in role_ids:
-            return "organizer"
-        elif ROLE_IDS["bot_op"] in role_ids:
-            return "bot_op"
-        elif ROLE_IDS["judge"] in role_ids:
-            return "judge"
-        else:
-            return "user"
-    except Exception as e:
-        print(f"Error determining user permission level: {e}")
-        return "user"  # Default to basic user permissions
-
-def filter_commands_by_permission(permission_level: str) -> dict:
-    """Filter command data based on user's permission level"""
-    try:
-        filtered_data = {}
-        
-        # Always include system and utility commands for everyone
-        filtered_data["system"] = COMMAND_DATA["system"]
-        filtered_data["utility"] = COMMAND_DATA["utility"]
-        
-        # Add role-specific commands based on permission level
-        if permission_level in ["owner", "organizer", "bot_op"]:
-            # Owners, organizers and bot ops get all commands
-            filtered_data["event_management"] = COMMAND_DATA["event_management"]
-            filtered_data["judge"] = COMMAND_DATA["judge"]
-        elif permission_level == "judge":
-            # Judges get judge commands and can see some event management
-            filtered_data["judge"] = COMMAND_DATA["judge"]
-            # Show limited event management (only event-result)
-            judge_event_commands = {
-                "title": "🏆 Event Management (Judge Access)",
-                "description": "Event commands available to judges",
-                "commands": [cmd for cmd in COMMAND_DATA["event_management"]["commands"] 
-                           if cmd["name"] == "/event-result"]
-            }
-            if judge_event_commands["commands"]:
-                filtered_data["event_management"] = judge_event_commands
-        
-        return filtered_data
-    except Exception as e:
-        print(f"Error filtering commands by permission: {e}")
-        # Return basic commands as fallback
-        return {
-            "system": COMMAND_DATA["system"],
-            "utility": COMMAND_DATA["utility"]
-        }
-
-def build_help_embed(permission_level: str, user_name: str) -> discord.Embed:
-    """Build a comprehensive help embed based on user's permission level"""
-    try:
-        # Get filtered commands for this user
-        filtered_commands = filter_commands_by_permission(permission_level)
-        
-        # Create main embed
-        embed = discord.Embed(
-            title="🎯 Naval Warfare Academy Tournament System",
-            description=f"**Command Guide** - Showing commands available to you\n*Permission Level: {permission_level.title()}*",
-            color=discord.Color.blue(),
-            timestamp=discord.utils.utcnow()
-        )
-        
-        # Add command categories
-        for category_key, category_data in filtered_commands.items():
-            commands_text = ""
-            
-            for cmd in category_data["commands"]:
-                # Format command entry
-                commands_text += f"**{cmd['name']}**\n"
-                commands_text += f"└ {cmd['description']}\n"
-                commands_text += f"└ *Permissions: {cmd['permissions']}*\n"
-                if cmd.get('round_options'):
-                    commands_text += f"└ 🎯 **Round Options:** {cmd['round_options']}\n"
-                if cmd.get('example'):
-                    commands_text += f"└ 💡 {cmd['example']}\n"
-                commands_text += "\n"
-            
-            # Add field to embed (Discord has a 1024 character limit per field)
-            if len(commands_text) > 1024:
-                # Split long content into multiple fields
-                parts = []
-                current_part = ""
-                for line in commands_text.split('\n'):
-                    if len(current_part + line + '\n') > 1024:
-                        parts.append(current_part.strip())
-                        current_part = line + '\n'
-                    else:
-                        current_part += line + '\n'
-                if current_part.strip():
-                    parts.append(current_part.strip())
-                
-                for i, part in enumerate(parts):
-                    field_name = category_data["title"] if i == 0 else f"{category_data['title']} (cont.)"
-                    embed.add_field(name=field_name, value=part, inline=False)
-            else:
-                embed.add_field(
-                    name=category_data["title"],
-                    value=commands_text.strip(),
-                    inline=False
-                )
-        
-        # Add helpful footer
-        embed.add_field(
-            name="💡 Need Help?",
-            value="• Commands marked with role requirements need special permissions\n• Contact an organizer if you need access to additional commands\n• Use `/rules` to view current tournament rules",
-            inline=False
-        )
-        
-        embed.set_footer(text=f"{TOURNAMENT_SYSTEM_NAME} • Requested by {user_name}")
-        
-        return embed
-        
-    except Exception as e:
-        print(f"Error building help embed: {e}")
-        # Return basic fallback embed
-        fallback_embed = discord.Embed(
-            title="🎯 Help Command",
-            description="Error loading detailed help. Basic commands:\n`/help` - This command\n`/rules` - View rules",
-            color=discord.Color.red()
-        )
-        return fallback_embed
-
-@tree.command(name="help", description="Show available commands based on your permissions")
-async def help_command(interaction: discord.Interaction):
-    """Enhanced help command with role-based filtering and detailed information"""
-    try:
-        # Determine user's permission level
-        permission_level = get_user_permission_level(interaction.user.roles)
-        
-        # Build appropriate help embed
-        embed = build_help_embed(permission_level, interaction.user.display_name)
-        
-        # Send ephemeral response
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-        
-    except Exception as e:
-        print(f"Error in enhanced help command: {e}")
-        # Fallback response
-        await interaction.response.send_message(
-            "❌ An error occurred while loading the help command. Please try again or contact an administrator.",
-            ephemeral=True
-        )
 
 @tree.command(name="rules", description="Manage or view tournament rules")
 async def rules_command(interaction: discord.Interaction):
@@ -1648,6 +1384,143 @@ async def team_balance(interaction: discord.Interaction, levels: str):
     except Exception as e:
         await interaction.response.send_message(f"❌ Error: {e}", ephemeral=True)
 
+@tree.command(name="add_captain", description="Add two captains to a tournament match and rename the channel")
+@app_commands.describe(
+    round="Round of the tournament (R1-R10, Q, SF, Final)",
+    captain1="First captain/team for the match",
+    captain2="Second captain/team for the match",
+    bracket="Optional bracket identifier (e.g., A, B, Winner, Loser)"
+)
+@app_commands.choices(
+    round=[
+        app_commands.Choice(name="R1", value="R1"),
+        app_commands.Choice(name="R2", value="R2"),
+        app_commands.Choice(name="R3", value="R3"),
+        app_commands.Choice(name="R4", value="R4"),
+        app_commands.Choice(name="R5", value="R5"),
+        app_commands.Choice(name="R6", value="R6"),
+        app_commands.Choice(name="R7", value="R7"),
+        app_commands.Choice(name="R8", value="R8"),
+        app_commands.Choice(name="R9", value="R9"),
+        app_commands.Choice(name="R10", value="R10"),
+        app_commands.Choice(name="Qualifier", value="Q"),
+        app_commands.Choice(name="Semi Final", value="SF"),
+        app_commands.Choice(name="Final", value="Final")
+    ]
+)
+async def add_captain(interaction: discord.Interaction, round: str, captain1: discord.Member, captain2: discord.Member, bracket: str = None):
+    """Add two captains to a tournament match and rename the channel with tournament rules."""
+    try:
+        # Check permissions - only Bot Admin, Organizer, or Bot Op can add captains
+        bot_admin_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_admin"])
+        organizer_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["organizer"])
+        bot_op_role = discord.utils.get(interaction.user.roles, id=ROLE_IDS["bot_op"])
+        
+        if not any([bot_admin_role, organizer_role, bot_op_role]):
+            await interaction.response.send_message("❌ You don't have permission to use this command. Only Bot Admin, Organizer, or Bot Op can add captains.", ephemeral=True)
+            return
+        
+        # Validate round parameter
+        valid_rounds = ["R1", "R2", "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "Q", "SF", "Final"]
+        if round not in valid_rounds:
+            await interaction.response.send_message("❌ Invalid round. Please select R1-R10, Q, SF, or Final.", ephemeral=True)
+            return
+        
+        # Get current channel
+        channel = interaction.channel
+        
+        # Create new channel name
+        if bracket:
+            new_name = f"{bracket}-{round.lower()}-{captain1.name.lower()}-vs-{captain2.name.lower()}"
+        else:
+            new_name = f"{round.lower()}-{captain1.name.lower()}-vs-{captain2.name.lower()}"
+        
+        # Remove special characters and spaces, replace with hyphens
+        new_name = re.sub(r'[^a-zA-Z0-9\-]', '-', new_name)
+        new_name = re.sub(r'-+', '-', new_name)  # Replace multiple hyphens with single hyphen
+        new_name = new_name.strip('-')  # Remove leading/trailing hyphens
+        
+        # Ensure channel name is within Discord's limits (100 characters max)
+        if len(new_name) > 100:
+            new_name = new_name[:100]
+        
+        # Rename the channel
+        try:
+            await channel.edit(name=new_name)
+            await interaction.response.send_message(f"✅ Channel renamed to `{new_name}`", ephemeral=True)
+        except discord.Forbidden:
+            await interaction.response.send_message("❌ I don't have permission to rename this channel.", ephemeral=True)
+            return
+        except discord.HTTPException as e:
+            await interaction.response.send_message(f"❌ Failed to rename channel: {e}", ephemeral=True)
+            return
+        
+        # Send tournament rules message
+        rules_embed = discord.Embed(
+            title="🏆 Tournament Match Setup",
+            description="Please use this channel for all tournament discussions.",
+            color=0x00ff00
+        )
+        
+        # Add logo as thumbnail (top right)
+        try:
+            with open("animated_1-2.gif", "rb") as logo_file:
+                logo_data = io.BytesIO(logo_file.read())
+                logo_file = discord.File(logo_data, filename="logo.gif")
+                rules_embed.set_thumbnail(url="attachment://logo.gif")
+        except FileNotFoundError:
+            print("Warning: animated_1-2.gif not found, skipping logo")
+        except Exception as e:
+            print(f"Warning: Could not load logo: {e}")
+        
+        rules_embed.add_field(
+            name="📋 Tournament Information",
+            value=(
+                "• Refer to https://discord.com/channels/1242231178208219256/1242280965775036466 for match schedules and pairings.\n"
+                "• Refer to https://discord.com/channels/1242231178208219256/1263470544574087169 for official updates.\n"
+                "• Refer to https://discord.com/channels/1242231178208219256/1349579975228919868 for tournament guidelines and regulations."
+            ),
+            inline=False
+        )
+        
+        rules_embed.add_field(
+            name="👥 Match Participants",
+            value=f"**Round:** {round}\n**Captain 1:** {captain1.mention}\n**Captain 2:** {captain2.mention}",
+            inline=False
+        )
+        
+        rules_embed.add_field(
+            name="🆘 Need Help?",
+            value="If you require any assistance, please ping <@&1424280282571341945> and they will be happy to assist.",
+            inline=False
+        )
+        
+        rules_embed.add_field(
+            name="🤝 Cooperation",
+            value="We appreciate your cooperation and wish you a competitive and fair tournament.",
+            inline=False
+        )
+        
+        rules_embed.set_footer(text=f"{ORGANIZATION_NAME} | {interaction.user.name} ✰—• • {datetime.datetime.now().strftime('%d-%m-%Y %H:%M')}")
+        
+        # Send the rules message with logo
+        try:
+            with open("animated_1-2.gif", "rb") as logo_file:
+                logo_data = io.BytesIO(logo_file.read())
+                logo_file = discord.File(logo_data, filename="logo.gif")
+                await channel.send(embed=rules_embed, file=logo_file)
+        except FileNotFoundError:
+            print("Warning: animated_1-2.gif not found, sending embed without logo")
+            await channel.send(embed=rules_embed)
+        except Exception as e:
+            print(f"Warning: Could not send logo, sending embed without logo: {e}")
+            await channel.send(embed=rules_embed)
+        
+        
+    except Exception as e:
+        await interaction.response.send_message(f"❌ An error occurred: {str(e)}", ephemeral=True)
+        print(f"Error in add_captain command: {e}")
+
 @tree.command(name="event", description="Event management commands")
 @app_commands.describe(
     action="Select the event action to perform"
@@ -1662,7 +1535,7 @@ async def event(interaction: discord.Interaction, action: app_commands.Choice[st
     """Base event command - this will be handled by subcommands"""
     await interaction.response.send_message(f"Please use `/event {action.value}` with the appropriate parameters.", ephemeral=True)
 
-@tree.command(name="event-create", description="Creates an event (Head Organizer/Head Helper/Helper Team only)")
+@tree.command(name="event-create", description="Creates an event (Bot Admin/Organizer/Bot Op only)")
 @app_commands.describe(
     team_1_captain="Captain of team 1",
     team_2_captain="Captain of team 2", 
@@ -2442,7 +2315,7 @@ async def unassigned_events(interaction: discord.Interaction):
         except Exception:
             pass
 
-@tree.command(name="event-delete", description="Delete a scheduled event (Bot Owner/Head Organizer/Head Helper/Helper Team only)")
+@tree.command(name="event-delete", description="Delete a scheduled event (Bot Admin/Organizer/Bot Op only)")
 async def event_delete(interaction: discord.Interaction):
     # Check permissions - Bot Owner, Organizer or Bot Op can delete events
     if interaction.user.id != BOT_OWNER_ID:
@@ -2684,7 +2557,7 @@ async def exchange_judge(
     await interaction.response.send_message(f"✅ Judge exchanged for {updated_count} event(s) in {interaction.channel.mention}.", ephemeral=True)
 
 
-@tree.command(name="event-edit", description="Edit the event in this ticket channel (Bot Owner/Head Organizer/Head Helper/Helper Team only)")
+@tree.command(name="event-edit", description="Edit the event in this ticket channel (Bot Admin/Organizer/Bot Op only)")
 @app_commands.describe(
     team_1_captain="Captain of team 1 (optional)",
     team_2_captain="Captain of team 2 (optional)", 
